@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Remix Remix Lippo Mall Puri Cinema XXI Engineering Management System",
+  "description": "Sistem manajemen internal engineering untuk Cinema XXI Lippo Mall Puri untuk mengelola peralatan, area, maintenance, vendor, order barang, dan pekerjaan engineering harian.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

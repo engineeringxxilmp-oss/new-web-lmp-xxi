@@ -1,0 +1,348 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-orbitron: "Orbitron", sans-serif;
+  --font-rajdhani: "Rajdhani", sans-serif;
+  
+  --animate-scanline: scanline 8s linear infinite;
+  --animate-glow-breath: glowBreath 4s ease-in-out infinite;
+  --animate-pulse-slow: slowPulse 3.5s ease-in-out infinite;
+  --animate-grid-glow: gridGlow 10s ease-in-out infinite;
+  --animate-camera-pan: cameraPan 24s ease-in-out infinite;
+  --animate-hologram-flicker: hologramFlicker 6s ease-in-out infinite;
+  --animate-laser-line: laserLine 4s ease-in-out infinite;
+}
+
+@keyframes cameraPan {
+  0%, 100% {
+    transform: scale(1.05) translate(0px, 0px) rotate(0deg);
+  }
+  15% {
+    transform: scale(1.32) translate(-10px, -5px) rotate(0.6deg);
+  }
+  30% {
+    transform: scale(1.0) translate(6px, 3px) rotate(-0.4deg);
+  }
+  45% {
+    transform: scale(1.38) translate(-16px, -12px) rotate(0.8deg);
+  }
+  60% {
+    transform: scale(1.02) translate(12px, -6px) rotate(-0.5deg);
+  }
+  75% {
+    transform: scale(1.26) translate(-6px, 9px) rotate(0.4deg);
+  }
+  90% {
+    transform: scale(1.08) translate(0px, -2px) rotate(-0.2deg);
+  }
+}
+
+@keyframes hologramFlicker {
+  0%, 19.999%, 22%, 62.999%, 64%, 64.999%, 70%, 100% {
+    opacity: 0.98;
+    filter: hue-rotate(0deg) saturate(1) contrast(1);
+  }
+  20%, 21.999% {
+    opacity: 0.35;
+    filter: hue-rotate(90deg) saturate(1.8) contrast(1.3) brightness(1.3);
+  }
+  63%, 63.999% {
+    opacity: 0.25;
+    filter: hue-rotate(-60deg) saturate(2) contrast(1.5);
+  }
+  65%, 69.999% {
+    opacity: 0.75;
+    filter: skewX(-3deg) brightness(1.4);
+  }
+}
+
+@keyframes laserLine {
+  0% {
+    top: 0%;
+    opacity: 0.1;
+  }
+  10%, 90% {
+    opacity: 0.75;
+  }
+  50% {
+    top: 100%;
+    opacity: 0.2;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.1;
+  }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes glowBreath {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(0, 229, 255, 0.4)); opacity: 0.85; }
+  50% { filter: drop-shadow(0 0 16px rgba(0, 229, 255, 0.8)); opacity: 1; }
+}
+
+@keyframes slowPulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@keyframes gridGlow {
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.22; }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: marquee var(--marquee-speed, 28s) linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(1rem) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Cyberpunk Aesthetic Dark Theme Base */
+.cyber-bg {
+  background-color: #060913;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.12) 0%, transparent 55%),
+    radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 0% 50%, rgba(16, 185, 129, 0.06) 0%, transparent 45%);
+  position: relative;
+  color: #f1f5f9;
+}
+
+.cyber-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(0, 240, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: center top;
+  pointer-events: none;
+  opacity: 0.8;
+  z-index: 0;
+}
+
+.cyber-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, transparent 60%, rgba(6, 9, 19, 0.8) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Cyberpunk Glass Card Panels */
+.cyber-panel {
+  background: rgba(13, 19, 34, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  box-shadow: 
+    0 0 20px rgba(0, 240, 255, 0.05),
+    0 10px 30px -5px rgba(0, 0, 0, 0.5);
+  border-radius: 20px;
+  position: relative;
+  transition: all 0.25s ease-out;
+}
+
+/* Cyberpunk Neon Color Accent Badges */
+.badge-blue {
+  background-color: rgba(0, 240, 255, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  text-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.badge-brown {
+  background-color: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  text-shadow: 0 0 8px rgba(251, 191, 36, 0.3);
+}
+
+.badge-red {
+  background-color: rgba(244, 63, 94, 0.14);
+  color: #fb7185;
+  border: 1px solid rgba(251, 113, 133, 0.4);
+  text-shadow: 0 0 8px rgba(251, 113, 133, 0.3);
+}
+
+.badge-green {
+  background-color: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  text-shadow: 0 0 8px rgba(52, 211, 153, 0.3);
+}
+
+.badge-white {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* Subtle corner brackets for panels */
+.cyber-panel-brackets::before,
+.cyber-panel-brackets::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: rgba(0, 229, 255, 0.45);
+  border-style: solid;
+  pointer-events: none;
+}
+
+.cyber-panel-brackets::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+  border-top-left-radius: 4px;
+}
+
+.cyber-panel-brackets::after {
+  bottom: -1px;
+  right: -1px;
+  border-width: 0 1px 1px 0;
+  border-bottom-right-radius: 4px;
+}
+
+/* Print Styles for Berita Acara A4 */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  /* Hide all UI elements, sidebars, toolbars, buttons, modals during print */
+  header, nav, footer, #berita-acara-bottom-actions, .no-print {
+    display: none !important;
+  }
+  
+  #a4-document-paper, #a4-images-paper {
+    box-shadow: none !important;
+    margin: 0 auto !important;
+    padding: 0 3cm 2cm 3cm !important;
+    width: 100% !important;
+    max-width: none !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  #a4-images-paper:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+}
+
+/* Explicit rule for PDF Exporting state */
+body.is-exporting-pdf .no-print,
+.is-exporting-pdf .no-print {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Custom styling for native date picker icon - Bright Cyan, Large & Glowing */
+input[type="date"] {
+  color-scheme: dark;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(70%) sepia(90%) saturate(2000%) hue-rotate(145deg) brightness(130%) contrast(120%);
+  width: 28px;
+  height: 28px;
+  padding: 3px;
+  border-radius: 8px;
+  background-color: rgba(0, 240, 255, 0.18);
+  border: 1px solid rgba(0, 240, 255, 0.55);
+  transition: all 0.2s ease-in-out;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  transform: scale(1.15);
+  background-color: rgba(0, 240, 255, 0.35);
+  border-color: rgba(0, 240, 255, 0.95);
+  filter: invert(85%) sepia(100%) saturate(3000%) hue-rotate(145deg) brightness(150%) contrast(150%);
+  box-shadow: 0 0 14px rgba(0, 240, 255, 0.7);
+}
+
+/* Running Auto Neon Chroma Keyframe Animation */
+@keyframes runningNeonCycle {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  50% {
+    filter: hue-rotate(180deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
+}
+
+.animate-running-neon {
+  animation: runningNeonCycle 8s linear infinite;
+}
+
+@keyframes rainbowGlowText {
+  0% {
+    text-shadow: 0 0 12px #00f0ff, 0 0 25px #00f0ff, 0 0 40px #00d8ff;
+    color: #38bdf8;
+  }
+  25% {
+    text-shadow: 0 0 12px #fbbf24, 0 0 25px #fbbf24, 0 0 40px #f59e0b;
+    color: #fde047;
+  }
+  50% {
+    text-shadow: 0 0 12px #f43f5e, 0 0 25px #f43f5e, 0 0 40px #e11d48;
+    color: #fb7185;
+  }
+  75% {
+    text-shadow: 0 0 12px #d946ef, 0 0 25px #d946ef, 0 0 40px #a855f7;
+    color: #f0abfc;
+  }
+  100% {
+    text-shadow: 0 0 12px #10b981, 0 0 25px #10b981, 0 0 40px #059669;
+    color: #34d399;
+  }
+}
+
+.animate-rainbow-text {
+  animation: rainbowGlowText 6s ease-in-out infinite alternate;
+}
+
+
