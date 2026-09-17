@@ -224,21 +224,21 @@ export default function App() {
     }
   };
 
-  const handleSaveEquipment = (eq: Equipment) => {
+  const handleSaveEquipment = async (eq: Equipment) => {
     try {
-      db.saveEquipment(eq);
-      triggerToast('Data berhasil disimpan.', 'success');
+      await db.saveEquipment(eq);
+      triggerToast('Data berhasil disimpan ke Firestore.', 'success');
     } catch (e) {
-      triggerToast('Data gagal disimpan.', 'error');
+      triggerToast('Data gagal disimpan ke Firestore.', 'error');
     }
   };
 
-  const handleDeleteEquipment = (id: string) => {
+  const handleDeleteEquipment = async (id: string) => {
     try {
-      db.deleteEquipment(id);
-      triggerToast('Data berhasil dihapus.', 'success');
+      await db.deleteEquipment(id);
+      triggerToast('Data berhasil dihapus dari Firestore.', 'success');
     } catch (e) {
-      triggerToast('Data gagal disimpan.', 'error');
+      triggerToast('Data gagal dihapus dari Firestore.', 'error');
     }
   };
 

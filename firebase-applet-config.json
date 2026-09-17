@@ -1,11 +1,9 @@
 {
-  "projectId": "laughing-name-ctjsh",
-  "appId": "1:1036008844225:web:d24be189a5dabeee259d40",
-  "apiKey": "AIzaSyC771asL1Cjn1w7wDZ4J4OwkVBXR0M40rk",
-  "authDomain": "laughing-name-ctjsh.firebaseapp.com",
-  "storageBucket": "laughing-name-ctjsh.firebasestorage.app",
-  "messagingSenderId": "1036008844225",
-  "measurementId": "",
-  "oAuthClientId": "1036008844225-5u15isuu6v6nua5gk3f6quboadn3qju0.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "new-web-lmp-xxi",
+  "appId": "",
+  "apiKey": "",
+  "authDomain": "new-web-lmp-xxi.firebaseapp.com",
+  "storageBucket": "new-web-lmp-xxi.firebasestorage.app",
+  "messagingSenderId": "863500625861",
+  "measurementId": "G-BL6YWD8HEN"
 }

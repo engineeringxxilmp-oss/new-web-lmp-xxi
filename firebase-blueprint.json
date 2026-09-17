@@ -1,0 +1,145 @@
+{
+  "entities": {
+    "Equipment": {
+      "title": "Equipment",
+      "description": "Equipment or hardware item in Cinema XXI Lippo Mall Puri",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "areaId": { "type": "string" },
+        "status": { "type": "string" },
+        "quantity": { "type": "number" },
+        "keterangan": { "type": "string" },
+        "serialNumber": { "type": "string" },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "foto": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "name", "areaId", "status"]
+    },
+    "Area": {
+      "title": "Area",
+      "description": "Area or room within Cinema XXI Lippo Mall Puri",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "floor": { "type": "string" },
+        "icon": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "PrEngineering": {
+      "title": "PrEngineering",
+      "description": "Purchase / Maintenance Requisition Engineering",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "noPr": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "quantity": { "type": "number" },
+        "satuan": { "type": "string" },
+        "keterangan": { "type": "string" },
+        "status": { "type": "string" },
+        "areaId": { "type": "string" }
+      },
+      "required": ["id", "noPr", "namaBarang", "status"]
+    },
+    "OrderBarang": {
+      "title": "OrderBarang",
+      "description": "Order tracking of goods and parts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "noPr": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "tanggalOrder": { "type": "string" },
+        "quantity": { "type": "number" },
+        "vendorId": { "type": "string" },
+        "status": { "type": "string" },
+        "keterangan": { "type": "string" }
+      },
+      "required": ["id", "namaBarang", "status"]
+    },
+    "BarangDatang": {
+      "title": "BarangDatang",
+      "description": "Arrived items log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggalBarangDatang": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "quantity": { "type": "number" },
+        "sesuaiOrder": { "type": "boolean" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "namaBarang"]
+    },
+    "RiwayatEquipment": {
+      "title": "RiwayatEquipment",
+      "description": "Service log and maintenance report of equipment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "equipmentId": { "type": "string" },
+        "areaId": { "type": "string" },
+        "tanggalServis": { "type": "string" },
+        "tanggalSelesai": { "type": "string" },
+        "jenisPekerjaan": { "type": "string" },
+        "deskripsiMasalah": { "type": "string" },
+        "tindakanPerbaikan": { "type": "string" },
+        "teknisi": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "areaId", "jenisPekerjaan", "status"]
+    },
+    "VendorTeknisi": {
+      "title": "VendorTeknisi",
+      "description": "Vendor or external technician contact",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "specialist": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    }
+  },
+  "firestore": {
+    "/equipment/{equipmentId}": {
+      "schema": "Equipment",
+      "description": "Central equipment registry for all cinema devices"
+    },
+    "/areas/{areaId}": {
+      "schema": "Area",
+      "description": "Cinema areas and studios"
+    },
+    "/pr_engineering/{prId}": {
+      "schema": "PrEngineering",
+      "description": "PR engineering requests"
+    },
+    "/orders/{orderId}": {
+      "schema": "OrderBarang",
+      "description": "Orders tracking"
+    },
+    "/barang_datang/{barangId}": {
+      "schema": "BarangDatang",
+      "description": "Received goods records"
+    },
+    "/riwayat_equipment/{riwayatId}": {
+      "schema": "RiwayatEquipment",
+      "description": "Maintenance history and service logs"
+    },
+    "/vendors/{vendorId}": {
+      "schema": "VendorTeknisi",
+      "description": "Technician and vendor contacts"
+    }
+  }
+}
