@@ -33,7 +33,13 @@ import {
   Edit3,
   ChevronDown,
   ChevronUp,
-  FileEdit
+  FileEdit,
+  Layers,
+  Plus,
+  Trash2,
+  CheckSquare,
+  Square,
+  ListOrdered
 } from 'lucide-react';
 
 import db from '../db/localDb';
@@ -55,6 +61,141 @@ import {
   DriveFileUploadResult
 } from '../lib/googleDriveService';
 
+export interface BatchBaItem {
+  id: string;
+  internalNo: string; // "BA 01", "BA 02", etc.
+  namaBarang: string; // "Lampu Philips MR16"
+  qty: string; // "10"
+  satuan: string; // "pcs"
+  htmlContent: string;
+  images: UploadedImage[];
+  kotaSign: string;
+  tglSign: number;
+  blnSign: string;
+  thnSign: number;
+  datePickerValue: string;
+  createdAt: string;
+  pdfFileName: string; // "Lampu Philips MR16.pdf"
+  pdfBase64?: string;
+}
+
+// Convert Blob to Base64 data URL
+export const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      resolve(reader.result as string);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+// Convert Base64 data URL back to Blob
+export const base64ToBlob = (dataUrl: string): Blob => {
+  const parts = dataUrl.split(',');
+  const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/pdf';
+  const binaryString = atob(parts[1]);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+};
+
+// IndexedDB persistence for BA PDF Blobs so they survive page reloads and avoid 5MB localStorage limits
+const IDB_NAME = 'xxi_ba_blobs_db';
+const IDB_STORE = 'blobs';
+
+const openBlobsIdb = (): Promise<IDBDatabase | null> => {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === 'undefined') return resolve(null);
+    try {
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        if (!req.result.objectStoreNames.contains(IDB_STORE)) {
+          req.result.createObjectStore(IDB_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+};
+
+const saveBaBlobToIdb = async (id: string, blob: Blob): Promise<void> => {
+  const idb = await openBlobsIdb();
+  if (!idb) return;
+  try {
+    const tx = idb.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(blob, id);
+  } catch (e) {
+    console.warn('IDB put blob error:', e);
+  }
+};
+
+const getBaBlobFromIdb = async (id: string): Promise<Blob | null> => {
+  const idb = await openBlobsIdb();
+  if (!idb) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = idb.transaction(IDB_STORE, 'readonly');
+      const getReq = tx.objectStore(IDB_STORE).get(id);
+      getReq.onsuccess = () => resolve((getReq.result as Blob) || null);
+      getReq.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+};
+
+const deleteBaBlobFromIdb = async (id: string): Promise<void> => {
+  const idb = await openBlobsIdb();
+  if (!idb) return;
+  try {
+    const tx = idb.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(id);
+  } catch {}
+};
+
+// Clean filename for PDF attachment (strictly uses nama barang asli, e.g. "Lampu Philips MR16.pdf")
+export const getCleanItemFileName = (namaBarang: string): string => {
+  let clean = (namaBarang || 'Permintaan Barang')
+    .replace(/[\\/:*?"<>|,;]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (clean.toLowerCase().endsWith('.pdf')) {
+    clean = clean.slice(0, -4).trim();
+  }
+  return `${clean}.pdf`;
+};
+
+// WhatsApp Batch Message Builder (combines real item names, qty & unit, strictly no BA 01/02)
+export const buildWhatsAppBatchMessage = (items: BatchBaItem[], cinemaName: string): string => {
+  const listText = items
+    .map((item) => {
+      const name = item.namaBarang.trim() || 'Barang Permintaan';
+      const qtyPart = item.qty.trim()
+        ? ` — ${item.qty.trim()}${item.satuan.trim() ? ' ' + item.satuan.trim() : ''}`
+        : '';
+      return `• ${name}${qtyPart}`;
+    })
+    .join('\n');
+
+  return `Selamat siang Bapak/Ibu,
+
+berikut kami kirimkan permintaan barang untuk kebutuhan operasional ${cinemaName}:
+
+${listText}
+
+Mohon untuk dilakukan approval.
+
+Terima kasih.`;
+};
+
 const DEFAULT_HTML_CONTENT = `<p><br></p>`;
 
 interface BeritaAcaraPermintaanViewProps {
@@ -68,6 +209,35 @@ export default function BeritaAcaraPermintaanView({ onShowToast }: BeritaAcaraPe
   const [htmlContent, setHtmlContent] = useState<string>(DEFAULT_HTML_CONTENT);
   const [images, setImages] = useState<UploadedImage[]>([]);
   const [namaBarangOrdered, setNamaBarangOrdered] = useState<string>('');
+  const [itemQty, setItemQty] = useState<string>('');
+  const [itemSatuan, setItemSatuan] = useState<string>('pcs');
+
+  // Batch Share BA Orderan States
+  const [batchBaList, setBatchBaList] = useState<BatchBaItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_ba_batch_list');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [selectedBaIds, setSelectedBaIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_ba_batch_list');
+      if (saved) {
+        const parsed: BatchBaItem[] = JSON.parse(saved);
+        return parsed.map((item) => item.id);
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
+  const [editingBaId, setEditingBaId] = useState<string | null>(null);
+  const baBlobsRef = useRef<Map<string, Blob>>(new Map());
+
+  // Next internal BA number (e.g. BA 01, BA 02, BA 03...)
+  const nextInternalNo = `BA ${String(batchBaList.length + 1).padStart(2, '0')}`;
 
   // Modals & Loaders
   const [isImageModalOpen, setIsImageModalOpen] = useState<boolean>(false);
@@ -748,25 +918,462 @@ export default function BeritaAcaraPermintaanView({ onShowToast }: BeritaAcaraPe
     }
   };
 
-  // Share WhatsApp Handler
-  const handleShareWhatsapp = async () => {
-    await handleExportPdf();
+  // Save or Update BA in Batch Queue
+  const handleSaveToBatch = async () => {
+    const trimmedName = namaBarangOrdered.trim();
+    if (!trimmedName) {
+      if (onShowToast) {
+        onShowToast('Silakan isi Nama Barang yang diorder terlebih dahulu sebelum menyimpan ke antrean!', 'warning');
+      }
+      return;
+    }
 
-    const message = `Selamat siang Bapak/Ibu.
+    setIsExporting(true);
+    if (onShowToast) {
+      onShowToast('Menyimpan BA dan menyiapkan dokumen PDF...', 'info');
+    }
 
-Berikut kami kirimkan Berita Acara Permintaan Barang: ${namaBarangOrdered}.
+    try {
+      // 1. Generate PDF Blob using existing function (no modification to design/template)
+      const blob = await generatePdfBlob();
+      const cleanFileName = getCleanItemFileName(trimmedName);
+      let pdfBase64: string | undefined;
+      try {
+        pdfBase64 = await blobToBase64(blob);
+      } catch {}
 
-Mohon izin untuk dilakukan approval.
+      if (editingBaId) {
+        // Updating existing BA in the batch
+        baBlobsRef.current.set(editingBaId, blob);
+        saveBaBlobToIdb(editingBaId, blob);
+        if (typeof window !== 'undefined') {
+          (window as any).__xxi_ba_blobs = (window as any).__xxi_ba_blobs || new Map();
+          (window as any).__xxi_ba_blobs.set(editingBaId, blob);
+        }
 
-Terima kasih.`;
+        setBatchBaList((prev) => {
+          const updated = prev.map((item) => {
+            if (item.id === editingBaId) {
+              return {
+                ...item,
+                namaBarang: trimmedName,
+                qty: itemQty.trim(),
+                satuan: itemSatuan.trim(),
+                htmlContent,
+                images: [...images],
+                kotaSign,
+                tglSign,
+                blnSign,
+                thnSign,
+                datePickerValue,
+                pdfFileName: cleanFileName,
+                pdfBase64: pdfBase64 || item.pdfBase64
+              };
+            }
+            return item;
+          });
+          try {
+            localStorage.setItem('xxi_ba_batch_list', JSON.stringify(updated));
+          } catch {
+            try {
+              const fallbackList = updated.map(({ pdfBase64: _, ...rest }) => rest);
+              localStorage.setItem('xxi_ba_batch_list', JSON.stringify(fallbackList));
+            } catch {}
+          }
+          return updated;
+        });
 
-    const encodedText = encodeURIComponent(message);
-    const waUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+        if (onShowToast) {
+          onShowToast(`Dokumen BA berhasil diperbarui!`, 'success');
+        }
+        setEditingBaId(null);
+      } else {
+        // Adding new BA to batch
+        const newIndex = batchBaList.length + 1;
+        const internalNo = `BA ${String(newIndex).padStart(2, '0')}`;
+        const newId = `ba-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
-    window.open(waUrl, '_blank');
+        baBlobsRef.current.set(newId, blob);
+        saveBaBlobToIdb(newId, blob);
+        if (typeof window !== 'undefined') {
+          (window as any).__xxi_ba_blobs = (window as any).__xxi_ba_blobs || new Map();
+          (window as any).__xxi_ba_blobs.set(newId, blob);
+        }
+
+        const newBaItem: BatchBaItem = {
+          id: newId,
+          internalNo,
+          namaBarang: trimmedName,
+          qty: itemQty.trim(),
+          satuan: itemSatuan.trim(),
+          htmlContent,
+          images: [...images],
+          kotaSign,
+          tglSign,
+          blnSign,
+          thnSign,
+          datePickerValue,
+          createdAt: new Date().toISOString(),
+          pdfFileName: cleanFileName,
+          pdfBase64
+        };
+
+        setBatchBaList((prev) => {
+          const updated = [...prev, newBaItem];
+          try {
+            localStorage.setItem('xxi_ba_batch_list', JSON.stringify(updated));
+          } catch {
+            try {
+              const fallbackList = updated.map(({ pdfBase64: _, ...rest }) => rest);
+              localStorage.setItem('xxi_ba_batch_list', JSON.stringify(fallbackList));
+            } catch {}
+          }
+          return updated;
+        });
+
+        // Automatically select the new item for sharing
+        setSelectedBaIds((prev) => [...prev, newId]);
+
+        if (onShowToast) {
+          onShowToast(`${internalNo} (${trimmedName}) berhasil disimpan ke antrean! Kertas dikosongkan untuk BA berikutnya.`, 'success');
+        }
+
+        // Reset paper to clean template for next BA (leaves logo & kop surat)
+        setHtmlContent(DEFAULT_HTML_CONTENT);
+        if (editorRef.current) {
+          editorRef.current.innerHTML = DEFAULT_HTML_CONTENT;
+        }
+        setImages([]);
+        setNamaBarangOrdered('');
+        setItemQty('');
+        setItemSatuan('pcs');
+        localStorage.removeItem('xxi_berita_acara_draft');
+        setLastSavedTime(null);
+      }
+    } catch (err: any) {
+      console.error('Failed to save BA to batch:', err);
+      if (onShowToast) {
+        onShowToast(`Gagal menyimpan BA: ${err.message || 'Error'}`, 'error');
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Load a BA from batch into the editor paper
+  const handleLoadBaFromBatch = (item: BatchBaItem) => {
+    setEditingBaId(item.id);
+    setNamaBarangOrdered(item.namaBarang);
+    setItemQty(item.qty || '');
+    setItemSatuan(item.satuan || 'pcs');
+    setHtmlContent(item.htmlContent);
+    if (editorRef.current) {
+      editorRef.current.innerHTML = item.htmlContent;
+    }
+    setImages(item.images || []);
+    setKotaSign(item.kotaSign);
+    setTglSign(item.tglSign);
+    setBlnSign(item.blnSign);
+    setThnSign(item.thnSign);
+    setDatePickerValue(item.datePickerValue);
+
+    // Scroll smoothly to editor
+    const editorEl = document.getElementById('a4-document-paper');
+    if (editorEl) {
+      editorEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 
     if (onShowToast) {
-      onShowToast('WhatsApp telah dibuka! Silakan pilih kontak dan lampirkan file PDF yang baru saja terunduh.', 'success');
+      onShowToast(`${item.internalNo} (${item.namaBarang}) dimuat ke kertas untuk diedit.`, 'info');
+    }
+  };
+
+  // Cancel editing an existing BA
+  const handleCancelEdit = () => {
+    setEditingBaId(null);
+    setNamaBarangOrdered('');
+    setItemQty('');
+    setItemSatuan('pcs');
+    setHtmlContent(DEFAULT_HTML_CONTENT);
+    if (editorRef.current) {
+      editorRef.current.innerHTML = DEFAULT_HTML_CONTENT;
+    }
+    setImages([]);
+    if (onShowToast) {
+      onShowToast('Batal edit. Kertas dikosongkan.', 'info');
+    }
+  };
+
+  // Delete a BA from batch queue
+  const handleDeleteBaFromBatch = (id: string) => {
+    setBatchBaList((prev) => {
+      const updated = prev.filter((item) => item.id !== id);
+      // Renumber internalNo sequentially (BA 01, BA 02, etc.)
+      const renumbered = updated.map((item, idx) => ({
+        ...item,
+        internalNo: `BA ${String(idx + 1).padStart(2, '0')}`
+      }));
+      try {
+        localStorage.setItem('xxi_ba_batch_list', JSON.stringify(renumbered));
+      } catch {}
+      return renumbered;
+    });
+    setSelectedBaIds((prev) => prev.filter((itemId) => itemId !== id));
+    baBlobsRef.current.delete(id);
+    deleteBaBlobFromIdb(id);
+    if (typeof window !== 'undefined' && (window as any).__xxi_ba_blobs) {
+      (window as any).__xxi_ba_blobs.delete(id);
+    }
+    if (editingBaId === id) {
+      handleCancelEdit();
+    }
+    if (onShowToast) {
+      onShowToast('BA dihapus dari antrean.', 'info');
+    }
+  };
+
+  // Toggle select all checkboxes
+  const handleToggleSelectAll = () => {
+    if (selectedBaIds.length === batchBaList.length) {
+      setSelectedBaIds([]);
+    } else {
+      setSelectedBaIds(batchBaList.map((item) => item.id));
+    }
+  };
+
+  // Toggle single item checkbox
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedBaIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  };
+
+  // Helper to retrieve cached blob or render PDF blob on demand
+  const getOrGenerateBaBlob = async (item: BatchBaItem): Promise<Blob> => {
+    // 1. From component memory
+    if (baBlobsRef.current.has(item.id)) {
+      return baBlobsRef.current.get(item.id)!;
+    }
+    // 2. From window cache
+    if (typeof window !== 'undefined' && (window as any).__xxi_ba_blobs?.has(item.id)) {
+      const b = (window as any).__xxi_ba_blobs.get(item.id);
+      baBlobsRef.current.set(item.id, b);
+      return b;
+    }
+    // 3. From IndexedDB persistent storage
+    const idbBlob = await getBaBlobFromIdb(item.id);
+    if (idbBlob) {
+      baBlobsRef.current.set(item.id, idbBlob);
+      return idbBlob;
+    }
+    // 4. From stored base64 data
+    if (item.pdfBase64) {
+      try {
+        const b = base64ToBlob(item.pdfBase64);
+        baBlobsRef.current.set(item.id, b);
+        saveBaBlobToIdb(item.id, b);
+        return b;
+      } catch (e) {
+        console.warn('Failed converting stored base64 to blob:', e);
+      }
+    }
+    // 5. From active editor if content matches
+    if (editorRef.current && editorRef.current.innerHTML === item.htmlContent) {
+      const blob = await generatePdfBlob();
+      baBlobsRef.current.set(item.id, blob);
+      saveBaBlobToIdb(item.id, blob);
+      return blob;
+    }
+    // 6. Temporarily mount to render PDF
+    setHtmlContent(item.htmlContent);
+    if (editorRef.current) {
+      editorRef.current.innerHTML = item.htmlContent;
+    }
+    setImages(item.images || []);
+    setKotaSign(item.kotaSign);
+    setTglSign(item.tglSign);
+    setBlnSign(item.blnSign);
+    setThnSign(item.thnSign);
+    await new Promise((r) => setTimeout(r, 200));
+    const blob = await generatePdfBlob();
+    baBlobsRef.current.set(item.id, blob);
+    saveBaBlobToIdb(item.id, blob);
+    return blob;
+  };
+
+  // Reset function strictly after successful share:
+  // - Sent BAs disappear from the list
+  // - Checkbox empty
+  // - Counter 0
+  // - Page returns to initial condition
+  const handleResetAfterSuccessfulShare = (sharedIds: string[]) => {
+    // 1. Remove shared BAs from batch list
+    setBatchBaList((prev) => {
+      const remaining = prev.filter((item) => !sharedIds.includes(item.id));
+      const renumbered = remaining.map((item, idx) => ({
+        ...item,
+        internalNo: `BA ${String(idx + 1).padStart(2, '0')}`
+      }));
+      try {
+        localStorage.setItem('xxi_ba_batch_list', JSON.stringify(renumbered));
+      } catch {}
+      return renumbered;
+    });
+
+    // 2. Clear selections
+    setSelectedBaIds([]);
+
+    // 3. Clear cached blobs for shared items
+    sharedIds.forEach((id) => {
+      baBlobsRef.current.delete(id);
+      deleteBaBlobFromIdb(id);
+      if (typeof window !== 'undefined' && (window as any).__xxi_ba_blobs) {
+        (window as any).__xxi_ba_blobs.delete(id);
+      }
+    });
+
+    // 4. Reset paper to clean template (leaves Logo & Kop Surat only)
+    setHtmlContent(DEFAULT_HTML_CONTENT);
+    if (editorRef.current) {
+      editorRef.current.innerHTML = DEFAULT_HTML_CONTENT;
+    }
+    setImages([]);
+    setNamaBarangOrdered('');
+    setItemQty('');
+    setItemSatuan('pcs');
+    setEditingBaId(null);
+    localStorage.removeItem('xxi_berita_acara_draft');
+    setLastSavedTime(null);
+  };
+
+  // Share WhatsApp Handler (Batch & Single with PDF file attachments & safe fallback)
+  const handleShareWhatsapp = async () => {
+    if (isExporting) return;
+
+    let itemsToShare: BatchBaItem[] = [];
+
+    if (batchBaList.length > 0) {
+      if (selectedBaIds.length === 0) {
+        if (onShowToast) {
+          onShowToast('Silakan centang minimal 1 BA di daftar untuk di-share ke WhatsApp.', 'warning');
+        }
+        return;
+      }
+      itemsToShare = batchBaList.filter((b) => selectedBaIds.includes(b.id));
+    } else {
+      // If batch list is empty, check if current editor has an item
+      const currentName = namaBarangOrdered.trim();
+      if (!currentName) {
+        if (onShowToast) {
+          onShowToast('Silakan isi Nama Barang atau simpan BA ke antrean terlebih dahulu!', 'warning');
+        }
+        return;
+      }
+      itemsToShare = [{
+        id: 'current-single-ba',
+        internalNo: 'BA 01',
+        namaBarang: currentName,
+        qty: itemQty.trim(),
+        satuan: itemSatuan.trim(),
+        htmlContent,
+        images,
+        kotaSign,
+        tglSign,
+        blnSign,
+        thnSign,
+        datePickerValue,
+        createdAt: new Date().toISOString(),
+        pdfFileName: getCleanItemFileName(currentName)
+      }];
+    }
+
+    setIsExporting(true);
+    if (onShowToast) {
+      onShowToast(`Menyiapkan ${itemsToShare.length} file PDF Berita Acara...`, 'info');
+    }
+
+    try {
+      // 1. Build Cinema Name & WhatsApp message text
+      const branding = db.getBranding();
+      let cinemaName = 'Cinema XXI Lippo Mall Puri';
+      if (branding && (branding.title || branding.subtitle)) {
+        const t = branding.title ? branding.title.trim() : 'Cinema XXI';
+        const s = branding.subtitle ? branding.subtitle.trim() : '';
+        cinemaName = `${t} ${s}`.trim();
+      }
+      const whatsappMessage = buildWhatsAppBatchMessage(itemsToShare, cinemaName);
+
+      // 2. Prepare ALL PDF files using existing generatePdfBlob
+      const pdfFiles: File[] = [];
+
+      for (const item of itemsToShare) {
+        let blob: Blob;
+        if (item.id === 'current-single-ba') {
+          blob = await generatePdfBlob();
+        } else {
+          blob = await getOrGenerateBaBlob(item);
+        }
+
+        const fileName = getCleanItemFileName(item.namaBarang);
+        const file = new File([blob], fileName, {
+          type: 'application/pdf',
+          lastModified: Date.now()
+        });
+        pdfFiles.push(file);
+      }
+
+      // 3. Check file sharing ability using navigator.canShare({ files })
+      const files = pdfFiles;
+      let canShareFiles = false;
+      try {
+        canShareFiles =
+          typeof navigator !== 'undefined' &&
+          typeof navigator.canShare === 'function' &&
+          Boolean(navigator.canShare({ files }));
+      } catch (checkErr) {
+        console.warn('navigator.canShare check encountered an issue:', checkErr);
+        canShareFiles = false;
+      }
+
+      if (canShareFiles) {
+        try {
+          await navigator.share({
+            text: whatsappMessage,
+            files: pdfFiles
+          });
+          // Reset only on successful share!
+          handleResetAfterSuccessfulShare(itemsToShare.map((i) => i.id));
+          if (onShowToast) {
+            onShowToast(`Berhasil membagikan ${pdfFiles.length} file PDF Berita Acara ke WhatsApp! Antrean BA di-reset.`, 'success');
+          }
+        } catch (shareErr: any) {
+          if (shareErr.name === 'AbortError') {
+            // User closed or canceled share sheet: DO NOT reset!
+            if (onShowToast) {
+              onShowToast('Pengiriman dibatalkan. Dokumen BA tetap tersimpan di antrean.', 'info');
+            }
+            return;
+          }
+          console.warn('Web Share API error:', shareErr);
+          if (onShowToast) {
+            onShowToast(`Gagal membagikan ke WhatsApp: ${shareErr.message || 'Error'}`, 'error');
+          }
+        }
+      } else {
+        if (onShowToast) {
+          onShowToast(
+            `Browser ini tidak mendukung pengiriman lampiran file PDF via Web Share API. Buka aplikasi di smartphone (Chrome Android / Safari iOS) atau buka tab baru untuk berbagi ${pdfFiles.length} file PDF langsung ke WhatsApp.`,
+            'warning'
+          );
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to share via WhatsApp:', err);
+      if (onShowToast) {
+        onShowToast(`Gagal menyiapkan dokumen: ${err.message || 'Error'}`, 'error');
+      }
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -889,20 +1496,44 @@ Terima kasih.`;
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-center">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
                 <div className="md:col-span-2">
+                  <label className="block text-[11px] text-slate-400 font-sans mb-1">Nama Barang / Permintaan:</label>
                   <input
                     type="text"
                     value={namaBarangOrdered}
                     onChange={(e) => setNamaBarangOrdered(e.target.value)}
                     placeholder="Contoh: Sensor Lampu Studio Barco & Sparepart"
-                    className="w-full bg-[#0b1329] border border-slate-700 focus:border-cyan-400 rounded-lg px-3.5 py-2.5 text-white font-sans text-sm h-11 focus:outline-hidden transition-colors"
+                    className="w-full bg-[#0b1329] border border-slate-700 focus:border-cyan-400 rounded-lg px-3.5 py-2 text-white font-sans text-sm h-10 focus:outline-hidden transition-colors"
                   />
                 </div>
 
-                <div className="bg-[#050914] px-3.5 py-2.5 h-11 rounded-lg border border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-sans mb-1">Jumlah / Qty:</label>
+                    <input
+                      type="text"
+                      value={itemQty}
+                      onChange={(e) => setItemQty(e.target.value)}
+                      placeholder="10"
+                      className="w-full bg-[#0b1329] border border-slate-700 focus:border-cyan-400 rounded-lg px-3 py-2 text-white font-sans text-sm h-10 focus:outline-hidden transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 font-sans mb-1">Satuan:</label>
+                    <input
+                      type="text"
+                      value={itemSatuan}
+                      onChange={(e) => setItemSatuan(e.target.value)}
+                      placeholder="pcs"
+                      className="w-full bg-[#0b1329] border border-slate-700 focus:border-cyan-400 rounded-lg px-3 py-2 text-white font-sans text-sm h-10 focus:outline-hidden transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-[#050914] px-3 py-2 h-10 rounded-lg border border-slate-800 flex items-center justify-between gap-2 overflow-x-auto">
                   <span className="text-slate-400 text-xs font-sans shrink-0 uppercase">NAMA FILE:</span>
-                  <span className="text-cyan-200 font-bold text-xs sm:text-sm truncate tracking-tight select-all uppercase">
+                  <span className="text-cyan-200 font-bold text-xs truncate tracking-tight select-all uppercase">
                     {formattedFileName.toUpperCase()}.PDF
                   </span>
                 </div>
@@ -1076,6 +1707,275 @@ Terima kasih.`;
         )}
       </div>
 
+      {/* ========================================================================= */}
+      {/* BATCH SHARE BA ORDERAN PANEL                                              */}
+      {/* ========================================================================= */}
+      <div
+        className="bg-[#0d1322]/95 backdrop-blur-md rounded-2xl border border-cyan-500/30 p-4 sm:p-5 shadow-[0_4px_25px_rgba(0,240,255,0.08)] space-y-4"
+        id="batch-share-ba-orderan-panel"
+      >
+        {/* Panel Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-cyan-950/90 border border-cyan-500/60 rounded-xl text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.25)]">
+              <Layers className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-black font-sans text-white tracking-wide uppercase">
+                  BATCH SHARE BA ORDERAN
+                </h3>
+                <span className="text-xs font-mono px-2 py-0.5 rounded-full border bg-cyan-950/80 text-cyan-300 border-cyan-500/50 font-bold">
+                  {batchBaList.length} BA Tersimpan
+                </span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded-full border bg-emerald-950/80 text-emerald-300 border-emerald-500/50 font-bold">
+                  {selectedBaIds.length} BA Dipilih
+                </span>
+              </div>
+              <p className="text-xs text-slate-300 font-sans mt-0.5">
+                Simpan beberapa BA terlebih dahulu, lalu pilih dengan checkbox dan kirim sekaligus ke WhatsApp dalam 1 pesan terpadu beserta seluruh lampiran PDF.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Share WhatsApp Button if items exist */}
+          {batchBaList.length > 0 && (
+            <button
+              onClick={handleShareWhatsapp}
+              disabled={isExporting}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white border border-emerald-400 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.4)] active:scale-95 disabled:opacity-50 shrink-0"
+              id="btn-batch-share-whatsapp-top"
+              type="button"
+            >
+              <Share2 className="w-4 h-4 text-emerald-200" />
+              <span>Share WhatsApp ({selectedBaIds.length} BA)</span>
+            </button>
+          )}
+        </div>
+
+        {/* Input Bar: Nama Barang, Qty, Satuan & Tombol Simpan ke Antrean */}
+        <div className="bg-[#070d1e] border border-cyan-500/30 rounded-xl p-3 sm:p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-cyan-300 font-bold text-xs font-mono">
+              <Package className="w-4 h-4 text-cyan-400" />
+              <span>{editingBaId ? 'EDIT DOKUMEN DALAM ANTREAN:' : 'INPUT BA UNTUK ANTREAN BATCH:'}</span>
+            </div>
+            {editingBaId && (
+              <span className="text-xs font-mono text-amber-300 bg-amber-950/80 border border-amber-500/40 px-2 py-0.5 rounded font-bold">
+                Sedang mengedit item yang dipilih
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+            <div className="sm:col-span-5">
+              <label className="block text-[11px] text-slate-300 font-sans mb-1 font-medium">
+                Nama Barang / Permintaan:
+              </label>
+              <input
+                type="text"
+                value={namaBarangOrdered}
+                onChange={(e) => setNamaBarangOrdered(e.target.value)}
+                placeholder="Contoh: Lampu Philips MR16"
+                className="w-full bg-[#0b1329] border border-slate-700 focus:border-cyan-400 rounded-lg px-3 py-2 text-white font-sans text-sm h-10 focus:outline-hidden transition-colors"
+                id="input-batch-nama-barang"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] text-slate-300 font-sans mb-1 font-medium">
+                Jumlah (Qty):
+              </label>
+              <input
+                type="text"
+                value={itemQty}
+                onChange={(e) => setItemQty(e.target.value)}
+                placeholder="10"
+                className="w-full bg-[#0b1329] border border-slate-700 focus:border-cyan-400 rounded-lg px-3 py-2 text-white font-sans text-sm h-10 focus:outline-hidden transition-colors"
+                id="input-batch-qty"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] text-slate-300 font-sans mb-1 font-medium">
+                Satuan:
+              </label>
+              <input
+                type="text"
+                value={itemSatuan}
+                onChange={(e) => setItemSatuan(e.target.value)}
+                placeholder="pcs"
+                className="w-full bg-[#0b1329] border border-slate-700 focus:border-cyan-400 rounded-lg px-3 py-2 text-white font-sans text-sm h-10 focus:outline-hidden transition-colors"
+                id="input-batch-satuan"
+              />
+            </div>
+
+            <div className="sm:col-span-3 flex gap-2">
+              {editingBaId ? (
+                <>
+                  <button
+                    onClick={handleSaveToBatch}
+                    disabled={isExporting}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white rounded-lg font-mono text-xs font-bold transition-all cursor-pointer h-10 active:scale-95 disabled:opacity-50"
+                    id="btn-update-batch-item"
+                    type="button"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Update BA</span>
+                  </button>
+                  <button
+                    onClick={handleCancelEdit}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-lg font-mono text-xs font-bold transition-all cursor-pointer h-10 active:scale-95"
+                    id="btn-cancel-batch-edit"
+                    type="button"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={handleSaveToBatch}
+                  disabled={isExporting}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-lg font-mono text-xs font-bold transition-all cursor-pointer h-10 shadow-[0_0_15px_rgba(6,182,212,0.4)] active:scale-95 disabled:opacity-50"
+                  id="btn-save-to-batch"
+                  type="button"
+                >
+                  <Plus className="w-4 h-4 text-cyan-200" />
+                  <span>+ Simpan ({nextInternalNo})</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* List of Saved BAs with Checkboxes */}
+        {batchBaList.length > 0 ? (
+          <div className="space-y-2">
+            {/* List Toolbar / Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleToggleSelectAll}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 hover:border-cyan-500/50 rounded-lg cursor-pointer transition-all active:scale-95 font-bold"
+                  type="button"
+                  id="btn-toggle-select-all"
+                >
+                  {selectedBaIds.length === batchBaList.length ? (
+                    <>
+                      <CheckSquare className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Batalkan Semua</span>
+                    </>
+                  ) : (
+                    <>
+                      <Square className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Pilih Semua</span>
+                    </>
+                  )}
+                </button>
+                <span className="text-slate-400">
+                  {selectedBaIds.length} dari {batchBaList.length} terpilih
+                </span>
+              </div>
+              <span className="text-[11px] text-slate-400 font-sans hidden sm:inline">
+                *File PDF otomatis dinamai sesuai nama barang asli saat dikirim
+              </span>
+            </div>
+
+            {/* List Table / Cards */}
+            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+              {batchBaList.map((item) => {
+                const isSelected = selectedBaIds.includes(item.id);
+                const isCurrentlyEditing = editingBaId === item.id;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl border transition-all ${
+                      isSelected
+                        ? 'bg-[#0a152e] border-cyan-500/60 shadow-[0_0_12px_rgba(0,240,255,0.12)]'
+                        : 'bg-[#050a17] border-slate-800/80 opacity-70 hover:opacity-100'
+                    } ${isCurrentlyEditing ? 'ring-2 ring-amber-400/80' : ''}`}
+                  >
+                    {/* Left: Checkbox + Internal No Badge + Real Item Name */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Checkbox */}
+                      <button
+                        onClick={() => handleToggleSelectOne(item.id)}
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all cursor-pointer shrink-0 ${
+                          isSelected
+                            ? 'bg-cyan-500 border-cyan-400 text-slate-950 shadow-[0_0_8px_rgba(0,240,255,0.4)]'
+                            : 'bg-slate-900 border-slate-700 text-transparent hover:border-slate-500'
+                        }`}
+                        type="button"
+                        id={`chk-${item.id}`}
+                        aria-label={`Pilih ${item.internalNo}`}
+                      >
+                        <Check className="w-4 h-4 stroke-[3]" />
+                      </button>
+
+                      {/* Internal BA Badge: BA 01, BA 02, etc. */}
+                      <span className="px-2.5 py-1 rounded-md bg-cyan-950/80 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-black shrink-0 tracking-wider">
+                        {item.internalNo}
+                      </span>
+
+                      {/* Item Details */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-white font-semibold text-sm font-sans truncate">
+                            {item.namaBarang}
+                          </span>
+                          {item.qty && (
+                            <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                              {item.qty} {item.satuan || ''}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-400 truncate mt-0.5 flex items-center gap-1.5">
+                          <span className="text-slate-500">File PDF:</span>
+                          <span className="text-cyan-300 font-semibold">{item.pdfFileName}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Actions (Lihat/Edit & Hapus) */}
+                    <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                      <button
+                        onClick={() => handleLoadBaFromBatch(item)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 hover:border-cyan-500/50 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer active:scale-95"
+                        type="button"
+                        id={`btn-edit-${item.id}`}
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Lihat / Edit</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteBaFromBatch(item.id)}
+                        className="p-1.5 bg-slate-900 hover:bg-rose-950/80 text-slate-400 hover:text-rose-300 border border-slate-800 hover:border-rose-500/50 rounded-lg text-xs transition-all cursor-pointer active:scale-95"
+                        type="button"
+                        id={`btn-delete-${item.id}`}
+                        title="Hapus dari antrean"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="p-4 rounded-xl bg-[#050a17] border border-slate-800 text-center space-y-1 text-slate-400">
+            <p className="text-xs font-sans">
+              Belum ada Berita Acara yang disimpan ke antrean batch.
+            </p>
+            <p className="text-[11px] text-slate-500 font-mono">
+              Isi nama barang di atas & edit kertas di bawah, lalu klik <strong className="text-cyan-400">+ Simpan (BA 01)</strong> untuk mulai mengumpulkan batch.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Main Document Editor Area (A4 Paper Box) */}
       <DocumentEditor
         editorRef={editorRef}
@@ -1121,6 +2021,18 @@ Terima kasih.`;
 
         {/* Core Request Buttons */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 w-full sm:w-auto">
+          {/* Simpan ke Antrean BA Button */}
+          <button
+            onClick={handleSaveToBatch}
+            disabled={isExporting}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3.5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white border border-cyan-400 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.4)] active:scale-95 disabled:opacity-50"
+            id="btn-bottom-save-batch"
+            type="button"
+          >
+            <Plus className="w-4 h-4 text-cyan-200" />
+            <span>{editingBaId ? 'Update BA' : `+ Antrean (${nextInternalNo})`}</span>
+          </button>
+
           {/* Preview Button */}
           <button
             onClick={() => setIsPreviewModalOpen(true)}
@@ -1153,7 +2065,7 @@ Terima kasih.`;
             type="button"
           >
             <Share2 className="w-4 h-4 text-emerald-200" />
-            <span>Share WhatsApp</span>
+            <span>Share WhatsApp {selectedBaIds.length > 0 ? `(${selectedBaIds.length} BA)` : ''}</span>
           </button>
 
           {/* Simpan Draft (Lokal) Button */}
