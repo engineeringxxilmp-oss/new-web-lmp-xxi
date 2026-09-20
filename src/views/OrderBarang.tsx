@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { OrderBarang, FkbStatus } from '../types';
-import { Plus, Edit2, Trash2, ShoppingBag, Check, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, ShoppingBag, Check, ChevronDown, X, CheckCircle2, PackagePlus } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getIndonesianDate, toISODate } from './PrEngineering';
@@ -288,113 +288,165 @@ export default function OrderBarangView({ orders, onSave, onDelete }: OrderBaran
         )}
       </div>
 
-      {/* Form Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingOrder ? 'Ubah Order Barang' : 'Tambah Order Barang'}
-        maxWidth="3xl"
-      >
-        <form onSubmit={handleSaveSubmit} className="space-y-5 font-sans" id="form-order-add">
-          
-          {/* Tanggal Order */}
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Tanggal Pemesanan <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="date"
-              value={toISODate(tanggalOrder)}
-              onChange={(e) => {
-                const val = e.target.value;
-                if (val) {
-                  setTanggalOrder(getIndonesianDate(val));
-                } else {
-                  setTanggalOrder('');
-                }
-                setErrors({ ...errors, tanggalOrder: '' });
-              }}
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all font-mono"
-              id="input-order-date"
-            />
-            {errors.tanggalOrder && <p className="text-sm font-semibold text-rose-400 mt-0.5">{errors.tanggalOrder}</p>}
-          </div>
-
-          {/* Nama Barang */}
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Nama Barang / Sparepart <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={namaBarang}
-              onChange={(e) => {
-                setNamaBarang(e.target.value);
-                setErrors({ ...errors, namaBarang: '' });
-              }}
-              placeholder="Contoh: Magnetic Contactor Schneider 18A..."
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all placeholder:text-slate-500"
-              id="input-order-item-name"
-            />
-            {errors.namaBarang && <p className="text-sm font-semibold text-rose-400 mt-0.5">{errors.namaBarang}</p>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Quantity */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                Quantity <span className="text-rose-400">*</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={quantity}
-                onChange={(e) => {
-                  setQuantity(Number(e.target.value));
-                  setErrors({ ...errors, quantity: '' });
-                }}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-emerald-300 bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all text-center font-mono"
-                id="input-order-qty"
-              />
-              {errors.quantity && <p className="text-sm font-semibold text-rose-400 mt-0.5">{errors.quantity}</p>}
-            </div>
-
-            {/* Status FKB */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono">
-                STATUS FPKB (Formulir Permintaan Kebutuhan Barang)
-              </label>
-              <select
-                value={statusFkb === 'Sudah Naik FKB' || statusFkb === 'Sudah Naik FPKB' ? 'Sudah Naik FPKB' : 'Belum Naik FPKB'}
-                onChange={(e) => setStatusFkb(e.target.value as FkbStatus)}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all cursor-pointer font-mono"
-                id="select-order-fkb"
+      {/* Form Modal (RAPOT STD MASTER DESIGN) */}
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          id="modal-order-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+        >
+          <div
+            className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl sm:max-w-3xl w-full p-6 sm:p-8 text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] animate-scale-in my-auto max-h-[92vh] overflow-y-auto"
+            id="modal-order-card"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-5 border-b border-slate-800">
+              <div className="flex items-center gap-3 text-amber-400 font-mono font-bold text-base sm:text-lg">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner">
+                  <PackagePlus className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-white text-base sm:text-lg font-black tracking-wide">
+                    {editingOrder ? 'UBAH ORDER BARANG' : 'TAMBAH ORDER BARANG'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    Lippo Mall Puri XXI — Form Pemesanan Barang & Sparepart
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors border border-transparent hover:border-slate-700 active:scale-95"
+                title="Tutup Dialog"
+                id="btn-close-modal-order"
               >
-                <option value="Belum Naik FPKB" className="text-rose-400 bg-slate-900 font-bold">Belum Naik FPKB</option>
-                <option value="Sudah Naik FPKB" className="text-emerald-400 bg-slate-900 font-bold">Sudah Naik FPKB</option>
-              </select>
+                <X className="w-6 h-6" />
+              </button>
             </div>
-          </div>
 
-          {/* Action buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border border-cyan-400/50 px-6 py-2.5 text-sm md:text-base font-black text-white active:scale-95 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all cursor-pointer"
-              id="btn-save-order"
-            >
-              <Check className="h-4 w-4" /> Simpan
-            </button>
+            <form onSubmit={handleSaveSubmit} className="space-y-6 mt-6 font-mono text-sm" id="form-order-add">
+              {/* Tanggal Pemesanan */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider flex items-center justify-between">
+                  <span>Tanggal Pemesanan <span className="text-rose-400 font-bold">*</span></span>
+                  <span className="text-[11px] text-cyan-400 font-normal">Klik untuk kalender</span>
+                </label>
+                <input
+                  type="date"
+                  value={toISODate(tanggalOrder)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val) {
+                      setTanggalOrder(getIndonesianDate(val));
+                    } else {
+                      setTanggalOrder('');
+                    }
+                    setErrors({ ...errors, tanggalOrder: '' });
+                  }}
+                  onClick={(e) => {
+                    try {
+                      (e.currentTarget as any).showPicker?.();
+                    } catch (_) {}
+                  }}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                  id="input-order-date"
+                />
+                {errors.tanggalOrder && (
+                  <p className="text-xs font-bold text-rose-400 mt-2 font-mono" id="order-error-date">
+                    {errors.tanggalOrder}
+                  </p>
+                )}
+              </div>
+
+              {/* Nama Barang */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Nama Barang / Sparepart <span className="text-rose-400 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={namaBarang}
+                  onChange={(e) => {
+                    setNamaBarang(e.target.value);
+                    setErrors({ ...errors, namaBarang: '' });
+                  }}
+                  placeholder="Contoh: Magnetic Contactor Schneider 18A..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
+                  id="input-order-item-name"
+                />
+                {errors.namaBarang && (
+                  <p className="text-xs font-bold text-rose-400 mt-2 font-mono" id="order-error-item">
+                    {errors.namaBarang}
+                  </p>
+                )}
+              </div>
+
+              {/* Row: Quantity & Status FPKB */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                    Quantity <span className="text-rose-400 font-bold">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => {
+                      setQuantity(Number(e.target.value));
+                      setErrors({ ...errors, quantity: '' });
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all text-center font-mono shadow-inner"
+                    id="input-order-qty"
+                  />
+                  {errors.quantity && (
+                    <p className="text-xs font-bold text-rose-400 mt-2 font-mono" id="order-error-qty">
+                      {errors.quantity}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                    STATUS FPKB
+                  </label>
+                  <select
+                    value={statusFkb === 'Sudah Naik FKB' || statusFkb === 'Sudah Naik FPKB' ? 'Sudah Naik FPKB' : 'Belum Naik FPKB'}
+                    onChange={(e) => setStatusFkb(e.target.value as FkbStatus)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                    id="select-order-fkb"
+                  >
+                    <option value="Belum Naik FPKB" className="bg-slate-900 text-rose-400 font-bold py-2">Belum Naik FPKB</option>
+                    <option value="Sudah Naik FPKB" className="bg-slate-900 text-emerald-400 font-bold py-2">Sudah Naik FPKB</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
+                  id="btn-cancel-order"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
+                  id="btn-save-order"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>{editingOrder ? 'Simpan Perubahan' : 'Simpan Order'}</span>
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </Modal>
+        </div>
+      )}
 
       {/* Confirmation delete popup */}
       <ConfirmDialog

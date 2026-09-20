@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Area, Equipment, EquipmentStatus } from '../types';
-import { Plus, Edit2, Trash2, Map, List, Check, Wrench, Minus, Info, CheckCircle, AlertCircle, XCircle, FileText, Download, CheckSquare, Square, Loader2, Sparkles, Printer, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, Map, List, Check, Wrench, Minus, Info, CheckCircle, AlertCircle, XCircle, FileText, Download, CheckSquare, Square, Loader2, Sparkles, Printer, Eye, X, CheckCircle2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import jsPDF from 'jspdf';
@@ -726,69 +726,106 @@ export default function MasterArea({
         </div>
       </div>
 
-      {/* --- MODAL AREA ADD/EDIT --- */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingArea ? '📝 Ubah Nama Area' : '➕ Tambah Area Baru'}
-        maxWidth="3xl"
-      >
-        <form onSubmit={handleSaveSubmit} className="space-y-5 font-sans" id="form-area">
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Nama Area <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setError('');
-              }}
-              placeholder="Contoh: Studio 4, Cafe Lounge, Lobby Utama..."
-              className="w-full h-12 md:h-13 rounded-xl border-2 border-slate-700 px-4 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all placeholder:text-slate-500"
-              id="input-area-name"
-              autoFocus
-            />
-            {error && (
-              <p className="text-sm font-semibold text-rose-400 mt-1" id="area-form-error">
-                {error}
-              </p>
-            )}
-          </div>
+      {/* --- MODAL AREA ADD/EDIT (RAPOT STUDIO MASTER DESIGN) --- */}
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          id="modal-area-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+        >
+          <div
+            className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl sm:max-w-3xl w-full p-6 sm:p-8 text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] animate-scale-in my-auto max-h-[92vh] overflow-y-auto"
+            id="modal-area-card"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-5 border-b border-slate-800">
+              <div className="flex items-center gap-3 text-amber-400 font-mono font-bold text-base sm:text-lg">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner">
+                  <Map className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-white text-base sm:text-lg font-black tracking-wide">
+                    {editingArea ? 'UBAH NAMA AREA' : 'TAMBAH AREA BARU'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    Lippo Mall Puri XXI — Form Master Area & Zona
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors border border-transparent hover:border-slate-700 active:scale-95"
+                title="Tutup Dialog"
+                id="btn-close-modal-area"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
 
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Keterangan / Catatan Area <span className="text-slate-400 font-normal font-sans text-xs">(Opsional)</span>
-            </label>
-            <textarea
-              value={keterangan}
-              onChange={(e) => setKeterangan(e.target.value)}
-              placeholder="Contoh: Area publik lantai 2, khusus akses teknisi..."
-              rows={3}
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all placeholder:text-slate-500 resize-none"
-              id="input-area-keterangan"
-            />
-          </div>
+            <form onSubmit={handleSaveSubmit} className="space-y-6 mt-6 font-mono text-sm" id="form-area">
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Nama Area <span className="text-rose-400 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setError('');
+                  }}
+                  placeholder="Contoh: Studio 4, Cafe Lounge, Lobby Utama..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
+                  id="input-area-name"
+                  autoFocus
+                />
+                {error && (
+                  <p className="text-xs font-bold text-rose-400 mt-2 font-mono" id="area-form-error">
+                    {error}
+                  </p>
+                )}
+              </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800 mt-4">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border border-cyan-400/50 px-6 py-2.5 text-sm md:text-base font-black text-white active:scale-95 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all cursor-pointer"
-              id="btn-save-area"
-            >
-              <Check className="h-4 w-4 stroke-[2.5]" /> Simpan Area
-            </button>
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Keterangan / Catatan Area <span className="text-slate-500 font-normal font-sans text-xs lowercase tracking-normal">(opsional)</span>
+                </label>
+                <textarea
+                  value={keterangan}
+                  onChange={(e) => setKeterangan(e.target.value)}
+                  placeholder="Contoh: Area publik lantai 2, khusus akses teknisi..."
+                  rows={3}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-medium placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all leading-relaxed shadow-inner resize-none"
+                  id="input-area-keterangan"
+                />
+              </div>
+
+              {/* Modal Footer / Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
+                  id="btn-cancel-area"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
+                  id="btn-save-area"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>{editingArea ? 'Simpan Perubahan' : 'Simpan Area'}</span>
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </Modal>
+        </div>
+      )}
 
       {/* --- CONFIRM DIALOG AREA DELETE --- */}
       <ConfirmDialog
@@ -803,27 +840,18 @@ export default function MasterArea({
       <Modal
         isOpen={isEqModalOpen}
         onClose={() => setIsEqModalOpen(false)}
-        title={editingEq ? '🔧 Ubah Data Equipment' : '➕ Tambah Equipment Baru'}
-        maxWidth="4xl"
+        title={editingEq ? 'UBAH DATA EQUIPMENT' : 'TAMBAH EQUIPMENT BARU'}
+        maxWidth="md"
       >
-        <form onSubmit={handleEqSaveSubmit} className="space-y-5 font-sans" id="form-equipment-area">
-          {/* Top small reminder message */}
-          <div className="text-xs md:text-sm text-cyan-200 bg-cyan-950/60 px-3.5 py-2.5 rounded-xl border border-cyan-500/30 flex items-center gap-2 leading-none">
-            <Info className="h-4 w-4 text-cyan-400 shrink-0" />
-            <span className="font-semibold">Mohon isi data equipment bioskop dengan lengkap.</span>
-          </div>
-
+        <form onSubmit={handleEqSaveSubmit} className="space-y-6 font-mono text-sm" id="form-equipment-area">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Left Side: Nama & Status */}
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Nama Equipment */}
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                    Nama Equipment <span className="text-rose-400">*</span>
-                  </label>
-                  <span className="text-xs text-cyan-400 font-mono font-bold">WAJIB</span>
-                </div>
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Nama Equipment <span className="text-rose-400 font-bold">*</span>
+                </label>
                 <input
                   type="text"
                   value={eqName}
@@ -832,11 +860,11 @@ export default function MasterArea({
                     setEqErrors((prev) => ({ ...prev, name: '' }));
                   }}
                   placeholder="Contoh: AC Standing, Projector, Speaker..."
-                  className="w-full h-12 md:h-13 rounded-xl border-2 border-slate-700 px-4 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:outline-hidden transition-all placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-400/20"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                   autoFocus
                 />
                 {eqErrors.name && (
-                  <p className="text-sm font-semibold text-rose-400 mt-0.5 flex items-center gap-1">
+                  <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
                     {eqErrors.name}
                   </p>
@@ -844,62 +872,47 @@ export default function MasterArea({
               </div>
 
               {/* Status Selector */}
-              <div className="space-y-1.5">
-                <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono block">
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
                   Status Operasional
                 </label>
                 <div className="grid grid-cols-3 gap-2.5">
-                  {/* Normal - Hijau Neon */}
                   <button
                     type="button"
                     onClick={() => setEqStatus('Normal')}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all cursor-pointer select-none ${
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer select-none ${
                       eqStatus === 'Normal'
-                        ? 'bg-emerald-950/90 border-emerald-400 text-emerald-300 font-black shadow-[0_0_20px_rgba(16,185,129,0.6)] ring-1 ring-emerald-400/50 scale-[1.02]'
-                        : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-emerald-500/60 hover:text-emerald-400 hover:shadow-[0_0_12px_rgba(16,185,129,0.35)]'
+                        ? 'bg-emerald-950/90 border-emerald-400 text-emerald-300 font-black shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-[1.02]'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
                     }`}
                   >
-                    <CheckCircle className={`h-6 w-6 mb-1 transition-transform ${
-                      eqStatus === 'Normal'
-                        ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.9)] scale-110'
-                        : 'text-slate-500'
-                    }`} />
+                    <CheckCircle className="h-5 w-5 mb-1 text-emerald-400" />
                     <span className="text-xs uppercase tracking-wider font-black font-mono">NORMAL</span>
                   </button>
 
-                  {/* Perbaikan - Oren/Kuning Neon */}
                   <button
                     type="button"
                     onClick={() => setEqStatus('Perbaikan')}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all cursor-pointer select-none ${
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer select-none ${
                       eqStatus === 'Perbaikan' || eqStatus === 'Maintenance'
-                        ? 'bg-amber-950/90 border-amber-400 text-amber-300 font-black shadow-[0_0_20px_rgba(245,158,11,0.6)] ring-1 ring-amber-400/50 scale-[1.02]'
-                        : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-amber-500/60 hover:text-amber-400 hover:shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                        ? 'bg-amber-950/90 border-amber-400 text-amber-300 font-black shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-[1.02]'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
                     }`}
                   >
-                    <AlertCircle className={`h-6 w-6 mb-1 transition-transform ${
-                      eqStatus === 'Perbaikan' || eqStatus === 'Maintenance'
-                        ? 'text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.9)] scale-110'
-                        : 'text-slate-500'
-                    }`} />
+                    <AlertCircle className="h-5 w-5 mb-1 text-amber-400" />
                     <span className="text-xs uppercase tracking-wider font-black font-mono">PERBAIKAN</span>
                   </button>
 
-                  {/* Rusak - Merah Neon */}
                   <button
                     type="button"
                     onClick={() => setEqStatus('Rusak')}
-                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 text-center transition-all cursor-pointer select-none ${
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all cursor-pointer select-none ${
                       eqStatus === 'Rusak'
-                        ? 'bg-rose-950/90 border-rose-400 text-rose-300 font-black shadow-[0_0_20px_rgba(244,63,94,0.6)] ring-1 ring-rose-400/50 scale-[1.02]'
-                        : 'bg-slate-900/80 border-slate-700 text-slate-400 hover:bg-slate-800 hover:border-rose-500/60 hover:text-rose-400 hover:shadow-[0_0_12px_rgba(244,63,94,0.35)]'
+                        ? 'bg-rose-950/90 border-rose-400 text-rose-300 font-black shadow-[0_0_15px_rgba(244,63,94,0.5)] scale-[1.02]'
+                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-300'
                     }`}
                   >
-                    <XCircle className={`h-6 w-6 mb-1 transition-transform ${
-                      eqStatus === 'Rusak'
-                        ? 'text-rose-400 drop-shadow-[0_0_10px_rgba(251,113,133,0.9)] scale-110'
-                        : 'text-slate-500'
-                    }`} />
+                    <XCircle className="h-5 w-5 mb-1 text-rose-400" />
                     <span className="text-xs uppercase tracking-wider font-black font-mono">RUSAK</span>
                   </button>
                 </div>
@@ -907,11 +920,11 @@ export default function MasterArea({
             </div>
 
             {/* Right Side: Quantity & Keterangan */}
-            <div className="space-y-4">
+            <div className="space-y-5">
               {/* Quantity Stepper */}
-              <div className="space-y-1.5">
-                <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono block">
-                  Jumlah / Quantity
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Jumlah / Quantity <span className="text-rose-400 font-bold">*</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <button
@@ -921,11 +934,11 @@ export default function MasterArea({
                       setEqQuantity(nextVal);
                       setEqErrors((prev) => ({ ...prev, quantity: '' }));
                     }}
-                    className="h-12 w-12 rounded-xl bg-slate-800 border border-slate-700 text-cyan-300 hover:bg-slate-700 hover:border-cyan-500/50 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-xs"
+                    className="h-11 w-11 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                   >
-                    <Minus className="h-5 w-5 stroke-[2.5]" />
+                    <Minus className="h-4 w-4" />
                   </button>
-                  
+
                   <input
                     type="number"
                     min="1"
@@ -935,7 +948,7 @@ export default function MasterArea({
                       setEqQuantity(val);
                       setEqErrors((prev) => ({ ...prev, quantity: '' }));
                     }}
-                    className="h-12 w-28 rounded-xl border-2 border-slate-700 text-center text-lg font-black font-mono focus:border-cyan-400 focus:outline-hidden transition-colors bg-slate-900/90 text-emerald-300 focus:ring-2 focus:ring-cyan-400/20"
+                    className="h-11 flex-1 rounded-xl border border-slate-700/80 bg-slate-950 text-center text-base font-black font-mono text-emerald-400 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
                   />
 
                   <button
@@ -945,13 +958,13 @@ export default function MasterArea({
                       setEqQuantity(nextVal);
                       setEqErrors((prev) => ({ ...prev, quantity: '' }));
                     }}
-                    className="h-12 w-12 rounded-xl bg-slate-800 border border-slate-700 text-cyan-300 hover:bg-slate-700 hover:border-cyan-500/50 active:scale-95 transition-all flex items-center justify-center cursor-pointer shadow-xs"
+                    className="h-11 w-11 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 active:scale-95 transition-all flex items-center justify-center cursor-pointer"
                   >
-                    <Plus className="h-5 w-5 stroke-[2.5]" />
+                    <Plus className="h-4 w-4" />
                   </button>
                 </div>
                 {eqErrors.quantity && (
-                  <p className="text-sm font-semibold text-rose-400 mt-0.5 flex items-center gap-1">
+                  <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1">
                     <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
                     {eqErrors.quantity}
                   </p>
@@ -959,16 +972,16 @@ export default function MasterArea({
               </div>
 
               {/* Keterangan */}
-              <div className="space-y-1.5">
-                <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                  Keterangan Tambahan <span className="text-slate-400 font-normal font-sans text-xs">(Opsional)</span>
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Keterangan Tambahan <span className="text-slate-500 font-normal lowercase">(opsional)</span>
                 </label>
                 <textarea
                   value={eqKeterangan}
                   onChange={(e) => setEqKeterangan(e.target.value)}
                   placeholder="Merk, tipe, serial number atau catatan kondisi..."
-                  rows={2.5}
-                  className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:outline-hidden transition-all placeholder:text-slate-500 resize-none focus:ring-2 focus:ring-cyan-400/20"
+                  rows={2}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-medium placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all leading-relaxed shadow-inner resize-none"
                   id="input-eq-keterangan"
                 />
               </div>
@@ -976,19 +989,20 @@ export default function MasterArea({
           </div>
 
           {/* Footer Action Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800 mt-4">
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
             <button
               type="button"
               onClick={() => setIsEqModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
+              className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border border-cyan-400/50 px-6 py-2.5 text-sm md:text-base font-black text-white active:scale-95 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all cursor-pointer"
+              className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
             >
-              <Check className="h-4 w-4 stroke-[2.5]" /> Simpan Equipment
+              <Check className="h-4 w-4 stroke-[2.5]" />
+              <span>Simpan Equipment</span>
             </button>
           </div>
         </form>

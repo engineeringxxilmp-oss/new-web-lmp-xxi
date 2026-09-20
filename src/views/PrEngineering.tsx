@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { PrEngineering, Area, PrCategory, PrStatus } from '../types';
-import { Plus, Edit2, Trash2, ClipboardList, Check, Clock, Eye, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, ClipboardList, Check, Clock, Eye, ChevronDown, X, CheckCircle2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -43,7 +43,7 @@ export const getIndonesianDate = (dString?: string) => {
 export const toISODate = (indonesianDateStr: string): string => {
   if (!indonesianDateStr) return '';
   const cleanStr = indonesianDateStr.trim();
-  
+
   // If it starts with YYYY-MM-DD (e.g. ISO string)
   if (/^\d{4}-\d{2}-\d{2}/.test(cleanStr)) {
     return cleanStr.substring(0, 10);
@@ -70,7 +70,7 @@ export const toISODate = (indonesianDateStr: string): string => {
     const mStr = month < 10 ? `0${month}` : `${month}`;
     return `${year}-${mStr}-${dStr}`;
   }
-  
+
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
@@ -87,25 +87,25 @@ export const toISODate = (indonesianDateStr: string): string => {
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
   ];
-  
+
   const parts = cleanStr.split(/\s+/);
   if (parts.length === 3) {
     const day = parseInt(parts[0], 10);
     const monthName = parts[1].toLowerCase();
     const year = parseInt(parts[2], 10);
-    
+
     let monthIndex = months.findIndex(m => m.toLowerCase() === monthName);
     if (monthIndex === -1) monthIndex = monthsEng.findIndex(m => m.toLowerCase() === monthName);
     if (monthIndex === -1) monthIndex = monthsIndShort.findIndex(m => m.toLowerCase() === monthName);
     if (monthIndex === -1) monthIndex = monthsEngShort.findIndex(m => m.toLowerCase() === monthName);
-    
+
     if (monthIndex !== -1) {
       const dStr = day < 10 ? `0${day}` : `${day}`;
       const mStr = monthIndex + 1 < 10 ? `0${monthIndex + 1}` : `${monthIndex + 1}`;
       return `${year}-${mStr}-${dStr}`;
     }
   }
-  
+
   try {
     const d = new Date(cleanStr);
     if (!isNaN(d.getTime())) {
@@ -117,7 +117,7 @@ export const toISODate = (indonesianDateStr: string): string => {
       return `${year}-${mStr}-${dStr}`;
     }
   } catch (e) {}
-  
+
   return '';
 };
 
@@ -380,7 +380,7 @@ export default function PrEngineeringView({ prList, areas, onSave, onDelete }: P
                       <span className="text-sm md:text-base text-emerald-400 font-black font-mono">• Selesai: {pr.tanggalSelesai}</span>
                     )}
                   </div>
-                  
+
                   <div>
                     <h4 className="font-black text-white text-lg md:text-xl leading-snug">
                       {pr.keluhan}
@@ -402,7 +402,7 @@ export default function PrEngineeringView({ prList, areas, onSave, onDelete }: P
                   <div>
                     {renderPrStatusSelect(pr)}
                   </div>
-                  
+
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => openEditModal(pr)}
@@ -428,175 +428,222 @@ export default function PrEngineeringView({ prList, areas, onSave, onDelete }: P
         )}
       </div>
 
-      {/* Form Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingPr ? 'Ubah Tiket PR' : 'Buat Tiket PR'}
-      >
-        <form onSubmit={handleSaveSubmit} className="space-y-5 font-sans" id="form-pr-eng">
-          
-          <div className="grid grid-cols-2 gap-4">
-            {/* Kategori */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Kategori PR <span className="text-red-400">*</span>
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as PrCategory)}
-                className="w-full h-12 md:h-13 rounded-xl border-2 border-gray-200 px-4 text-base md:text-lg font-bold text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-hidden transition-all cursor-pointer"
-                id="select-pr-cat"
+      {/* Form Modal (RAPOT STUDIO MASTER DESIGN) */}
+      {isModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          id="modal-pr-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsModalOpen(false);
+          }}
+        >
+          <div
+            className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl sm:max-w-3xl w-full p-6 sm:p-8 text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] animate-scale-in my-auto max-h-[92vh] overflow-y-auto"
+            id="modal-pr-card"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-5 border-b border-slate-800">
+              <div className="flex items-center gap-3 text-amber-400 font-mono font-bold text-base sm:text-lg">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner">
+                  <ClipboardList className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-white text-base sm:text-lg font-black tracking-wide">
+                    {editingPr ? 'EDIT TIKET PR' : 'BUAT TIKET PR TEKNIK'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    Lippo Mall Puri XXI — Form Permintaan Perbaikan (PR)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors border border-transparent hover:border-slate-700 active:scale-95"
+                title="Tutup Dialog"
+                id="btn-close-modal-pr"
               >
-                <option value="PR AC" className="text-gray-900 bg-white">PR AC</option>
-                <option value="PR Projector" className="text-gray-900 bg-white">PR Projector</option>
-                <option value="PR Building" className="text-gray-900 bg-white">PR Building</option>
-                <option value="PR Studio" className="text-gray-900 bg-white">PR Studio</option>
-                <option value="PR Engineering" className="text-gray-900 bg-white">PR Engineering</option>
-              </select>
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
-            {/* Area */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Area Kerusakan <span className="text-red-400">*</span>
-              </label>
-              <select
-                value={areaId}
-                onChange={(e) => {
-                  setAreaId(e.target.value);
-                  setErrors({ ...errors, areaId: '' });
-                }}
-                className="w-full h-12 md:h-13 rounded-xl border-2 border-gray-200 px-4 text-base md:text-lg font-bold text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-hidden transition-all cursor-pointer"
-                id="select-pr-area"
-              >
-                <option value="" disabled className="text-gray-400 bg-white">Pilih Area...</option>
-                {areas.map((a) => (
-                  <option key={a.id} value={a.id} className="text-gray-900 bg-white">{a.name}</option>
-                ))}
-              </select>
-              {errors.areaId && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.areaId}</p>}
-            </div>
+            <form onSubmit={handleSaveSubmit} className="space-y-6 mt-6 font-mono text-sm" id="form-pr-eng">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                {/* Kategori */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                    Kategori PR <span className="text-rose-400 font-bold">*</span>
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as PrCategory)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                    id="select-pr-cat"
+                  >
+                    <option value="PR AC" className="bg-slate-900 text-white py-2">PR AC</option>
+                    <option value="PR Projector" className="bg-slate-900 text-white py-2">PR Projector</option>
+                    <option value="PR Building" className="bg-slate-900 text-white py-2">PR Building</option>
+                    <option value="PR Studio" className="bg-slate-900 text-white py-2">PR Studio</option>
+                    <option value="PR Engineering" className="bg-slate-900 text-white py-2">PR Engineering</option>
+                  </select>
+                </div>
+
+                {/* Area */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                    Area Kerusakan <span className="text-rose-400 font-bold">*</span>
+                  </label>
+                  <select
+                    value={areaId}
+                    onChange={(e) => {
+                      setAreaId(e.target.value);
+                      setErrors({ ...errors, areaId: '' });
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                    id="select-pr-area"
+                  >
+                    <option value="" disabled className="bg-slate-900 text-slate-500">Pilih Area...</option>
+                    {areas.map((a) => (
+                      <option key={a.id} value={a.id} className="bg-slate-900 text-white py-2">{a.name}</option>
+                    ))}
+                  </select>
+                  {errors.areaId && <p className="text-xs font-bold text-rose-400 mt-2 font-mono">{errors.areaId}</p>}
+                </div>
+              </div>
+
+              {/* Keluhan */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Keluhan / Kerusakan Detail <span className="text-rose-400 font-bold">*</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={keluhan}
+                  onChange={(e) => {
+                    setKeluhan(e.target.value);
+                    setErrors({ ...errors, keluhan: '' });
+                  }}
+                  placeholder="Contoh: Bunyi abnormal fan pada chiller area lobby..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-medium placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all leading-relaxed shadow-inner resize-none"
+                  id="input-pr-complaint"
+                />
+                {errors.keluhan && <p className="text-xs font-bold text-rose-400 mt-2 font-mono">{errors.keluhan}</p>}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                {/* Tanggal Penemuan */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider flex items-center justify-between">
+                    <span>Tanggal Temuan <span className="text-rose-400 font-bold">*</span></span>
+                    <span className="text-[11px] text-cyan-400 font-normal">Klik untuk kalender</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={toISODate(tanggalPenemuan)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        setTanggalPenemuan(getIndonesianDate(val));
+                      } else {
+                        setTanggalPenemuan('');
+                      }
+                      setErrors({ ...errors, tanggalPenemuan: '' });
+                    }}
+                    onClick={(e) => {
+                      try {
+                        (e.currentTarget as any).showPicker?.();
+                      } catch (_) {}
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                    id="input-pr-date-found"
+                  />
+                  {errors.tanggalPenemuan && <p className="text-xs font-bold text-rose-400 mt-2 font-mono">{errors.tanggalPenemuan}</p>}
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                    Status Pekerjaan
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as PrStatus)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                    id="select-pr-status"
+                  >
+                    <option value="Belum Dikerjakan" className="bg-slate-900 text-rose-400 font-bold py-2">Belum Di Kerjakan</option>
+                    <option value="Sedang Diproses" className="bg-slate-900 text-amber-400 font-bold py-2">Sedang Di Proses</option>
+                    <option value="Selesai" className="bg-slate-900 text-emerald-400 font-bold py-2">Selesai</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Tanggal Selesai (Hanya aktif jika status Selesai) */}
+              {status === 'Selesai' && (
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider flex items-center justify-between">
+                    <span>Tanggal Selesai <span className="text-emerald-400 font-bold">*</span></span>
+                    <span className="text-[11px] text-cyan-400 font-normal">Klik untuk kalender</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={toISODate(tanggalSelesai)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        setTanggalSelesai(getIndonesianDate(val));
+                      } else {
+                        setTanggalSelesai('');
+                      }
+                    }}
+                    onClick={(e) => {
+                      try {
+                        (e.currentTarget as any).showPicker?.();
+                      } catch (_) {}
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-emerald-400/80 text-white text-sm sm:text-base font-semibold focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/30 transition-all cursor-pointer shadow-inner"
+                    id="input-pr-date-done"
+                  />
+                </div>
+              )}
+
+              {/* Keterangan */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Keterangan Progress / Tindakan <span className="text-slate-500 font-normal font-sans text-xs lowercase tracking-normal">(opsional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={keterangan}
+                  onChange={(e) => setKeterangan(e.target.value)}
+                  placeholder="Tulis sparepart yang dibutuhkan, kronologi, atau teknisi pelaksana..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-medium placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all leading-relaxed shadow-inner resize-none"
+                  id="input-pr-desc"
+                />
+              </div>
+
+              {/* Modal Footer / Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
+                  id="btn-save-pr"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>{editingPr ? 'Simpan Perubahan' : 'Simpan Tiket PR'}</span>
+                </button>
+              </div>
+            </form>
           </div>
-
-          {/* Keluhan */}
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-              Keluhan / Kerusakan Detail <span className="text-red-400">*</span>
-            </label>
-            <textarea
-              rows={3}
-              value={keluhan}
-              onChange={(e) => {
-                setKeluhan(e.target.value);
-                setErrors({ ...errors, keluhan: '' });
-              }}
-              placeholder="Contoh: Bunyi abnormal fan pada chiller area lobby..."
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base md:text-lg font-bold text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-hidden transition-all placeholder:text-gray-400 resize-none"
-              id="input-pr-complaint"
-            />
-            {errors.keluhan && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.keluhan}</p>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Tanggal Penemuan */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Tanggal Temuan <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="date"
-                value={toISODate(tanggalPenemuan)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val) {
-                    setTanggalPenemuan(getIndonesianDate(val));
-                  } else {
-                    setTanggalPenemuan('');
-                  }
-                  setErrors({ ...errors, tanggalPenemuan: '' });
-                }}
-                className="w-full h-12 md:h-13 rounded-xl border-2 border-gray-200 px-4 text-base md:text-lg font-bold text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-hidden transition-all"
-                id="input-pr-date-found"
-              />
-              {errors.tanggalPenemuan && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.tanggalPenemuan}</p>}
-            </div>
-
-            {/* Status */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono">
-                Status Pekerjaan
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as PrStatus)}
-                className="w-full h-12 md:h-13 rounded-xl border-2 border-gray-200 px-4 text-base md:text-lg font-bold text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-hidden transition-all cursor-pointer"
-                id="select-pr-status"
-              >
-                <option value="Belum Dikerjakan" className="text-gray-900 bg-white font-bold">Belum Di Kerjakan</option>
-                <option value="Sedang Diproses" className="text-gray-900 bg-white font-bold">Sedang Di Proses</option>
-                <option value="Selesai" className="text-gray-900 bg-white font-bold">Selesai</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Tanggal Selesai (Hanya aktif jika status Selesai) */}
-          {status === 'Selesai' && (
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono">
-                Tanggal Selesai
-              </label>
-              <input
-                type="date"
-                value={toISODate(tanggalSelesai)}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (val) {
-                    setTanggalSelesai(getIndonesianDate(val));
-                  } else {
-                    setTanggalSelesai('');
-                  }
-                }}
-                className="w-full h-12 md:h-13 rounded-xl border-2 border-emerald-300 px-4 text-base md:text-lg font-bold text-emerald-900 bg-white focus:border-emerald-500 focus:outline-hidden transition-all"
-                id="input-pr-date-done"
-              />
-            </div>
-          )}
-
-          {/* Keterangan */}
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-              Keterangan Progress / Tindakan <span className="text-slate-300 font-normal font-sans text-xs">(Opsional)</span>
-            </label>
-            <textarea
-              rows={2}
-              value={keterangan}
-              onChange={(e) => setKeterangan(e.target.value)}
-              placeholder="Tulis sparepart yang dibutuhkan, kronologi, atau teknisi pelaksana..."
-              className="w-full rounded-xl border-2 border-gray-200 px-4 py-3 text-base md:text-lg font-bold text-gray-900 bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 focus:outline-hidden transition-all placeholder:text-gray-400 resize-none"
-              id="input-pr-desc"
-            />
-          </div>
-
-          {/* Save buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-150">
-            <button
-              type="button"
-              onClick={() => setIsModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 active:scale-95 transition-all cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-6 py-2.5 text-sm md:text-base font-black text-white hover:bg-blue-700 active:scale-95 shadow-md transition-all cursor-pointer"
-              id="btn-save-pr"
-            >
-              <Check className="h-4 w-4" /> Simpan
-            </button>
-          </div>
-        </form>
-      </Modal>
+        </div>
+      )}
 
       {/* Confirm Deletion */}
       <ConfirmDialog
