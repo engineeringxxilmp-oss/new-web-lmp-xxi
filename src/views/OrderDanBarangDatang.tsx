@@ -18,7 +18,10 @@ import {
   ArrowRight,
   Sparkles,
   Layers,
-  ChevronDown
+  ChevronDown,
+  X,
+  CheckCircle2,
+  PackagePlus
 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -809,102 +812,160 @@ export default function OrderDanBarangDatangView({
       {/* ========================================================================= */}
       {/* ======================== MODAL ORDER BARANG ============================= */}
       {/* ========================================================================= */}
-      <Modal
-        isOpen={isOrderModalOpen}
-        onClose={() => setIsOrderModalOpen(false)}
-        title={editingOrder ? 'Ubah Order Barang' : 'Tambah Order Barang'}
-        maxWidth="3xl"
-      >
-        <form onSubmit={handleSaveOrderSubmit} className="space-y-5 font-sans" id="form-order-unified">
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-amber-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Tanggal Pemesanan <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="date"
-              value={toISODate(orderTanggal)}
-              onChange={(e) => {
-                const val = e.target.value;
-                setOrderTanggal(val ? getIndonesianDate(val) : '');
-                setOrderErrors({ ...orderErrors, tanggalOrder: '' });
-              }}
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-hidden transition-all font-mono"
-              id="input-unified-order-date"
-            />
-            {orderErrors.tanggalOrder && <p className="text-sm font-semibold text-rose-400 mt-0.5">{orderErrors.tanggalOrder}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-amber-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Nama Barang / Sparepart <span className="text-rose-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={orderNamaBarang}
-              onChange={(e) => {
-                setOrderNamaBarang(e.target.value);
-                setOrderErrors({ ...orderErrors, namaBarang: '' });
-              }}
-              placeholder="Contoh: Magnetic Contactor Schneider 18A..."
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-hidden transition-all placeholder:text-slate-500"
-              id="input-unified-order-item-name"
-            />
-            {orderErrors.namaBarang && <p className="text-sm font-semibold text-rose-400 mt-0.5">{orderErrors.namaBarang}</p>}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-amber-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                Quantity <span className="text-rose-400">*</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                value={orderQty}
-                onChange={(e) => {
-                  setOrderQty(Number(e.target.value));
-                  setOrderErrors({ ...orderErrors, quantity: '' });
-                }}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-amber-300 bg-slate-900/90 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-hidden transition-all text-center font-mono"
-                id="input-unified-order-qty"
-              />
-              {orderErrors.quantity && <p className="text-sm font-semibold text-rose-400 mt-0.5">{orderErrors.quantity}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-amber-300 uppercase tracking-wider font-mono">
-                STATUS FPKB (Formulir Permintaan Kebutuhan Barang)
-              </label>
-              <select
-                value={orderStatusFkb === 'Sudah Naik FKB' || orderStatusFkb === 'Sudah Naik FPKB' ? 'Sudah Naik FPKB' : 'Belum Naik FPKB'}
-                onChange={(e) => setOrderStatusFkb(e.target.value as FkbStatus)}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 focus:outline-hidden transition-all cursor-pointer font-mono"
-                id="select-unified-order-fkb"
+      {isOrderModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+          id="modal-order-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsOrderModalOpen(false);
+          }}
+        >
+          <div 
+            className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl sm:max-w-3xl w-full p-6 sm:p-8 text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] animate-scale-in my-auto max-h-[92vh] overflow-y-auto"
+            id="modal-order-card"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-5 border-b border-slate-800">
+              <div className="flex items-center gap-3 text-amber-400 font-mono font-bold text-base sm:text-lg">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner">
+                  <PackagePlus className="w-5 h-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-white text-base sm:text-lg font-black tracking-wide">
+                    {editingOrder ? 'UBAH ORDER BARANG' : 'TAMBAH ORDER BARANG'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    Lippo Mall Puri XXI — Form Pemesanan Barang & Sparepart
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsOrderModalOpen(false)}
+                className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors border border-transparent hover:border-slate-700 active:scale-95"
+                title="Tutup Dialog"
+                id="btn-close-modal-order"
               >
-                <option value="Belum Naik FPKB" className="text-rose-400 bg-slate-900 font-bold">Belum Naik FPKB</option>
-                <option value="Sudah Naik FPKB" className="text-emerald-400 bg-slate-900 font-bold">Sudah Naik FPKB</option>
-              </select>
+                <X className="w-6 h-6" />
+              </button>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-            <button
-              type="button"
-              onClick={() => setIsOrderModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 border border-amber-300 px-6 py-2.5 text-sm md:text-base font-black text-slate-950 active:scale-95 shadow-[0_0_15px_rgba(245,158,11,0.4)] transition-all cursor-pointer"
-              id="btn-save-order-unified"
-            >
-              <Check className="h-4 w-4" /> Simpan
-            </button>
+            <form onSubmit={handleSaveOrderSubmit} className="space-y-6 mt-6 font-mono text-sm" id="form-order-unified">
+              {/* Tanggal Pemesanan */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider flex items-center justify-between">
+                  <span>Tanggal Pemesanan <span className="text-rose-400 font-bold">*</span></span>
+                  <span className="text-[11px] text-cyan-400 font-normal">Klik untuk kalender</span>
+                </label>
+                <input
+                  type="date"
+                  value={toISODate(orderTanggal)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setOrderTanggal(val ? getIndonesianDate(val) : '');
+                    setOrderErrors({ ...orderErrors, tanggalOrder: '' });
+                  }}
+                  onClick={(e) => {
+                    try {
+                      (e.currentTarget as any).showPicker?.();
+                    } catch (_) {}
+                  }}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                  id="input-unified-order-date"
+                />
+                {orderErrors.tanggalOrder && (
+                  <p className="text-xs font-bold text-rose-400 mt-2 font-mono" id="order-error-date">
+                    {orderErrors.tanggalOrder}
+                  </p>
+                )}
+              </div>
+
+              {/* Nama Barang / Sparepart */}
+              <div>
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                  Nama Barang / Sparepart <span className="text-rose-400 font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={orderNamaBarang}
+                  onChange={(e) => {
+                    setOrderNamaBarang(e.target.value);
+                    setOrderErrors({ ...orderErrors, namaBarang: '' });
+                  }}
+                  placeholder="Contoh: Magnetic Contactor Schneider 18A..."
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
+                  id="input-unified-order-item-name"
+                />
+                {orderErrors.namaBarang && (
+                  <p className="text-xs font-bold text-rose-400 mt-2 font-mono" id="order-error-item">
+                    {orderErrors.namaBarang}
+                  </p>
+                )}
+              </div>
+
+              {/* Row: Quantity & Status FPKB */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                    Quantity <span className="text-rose-400 font-bold">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={orderQty}
+                    onChange={(e) => {
+                      setOrderQty(Number(e.target.value));
+                      setOrderErrors({ ...orderErrors, quantity: '' });
+                    }}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all text-center font-mono shadow-inner"
+                    id="input-unified-order-qty"
+                  />
+                  {orderErrors.quantity && (
+                    <p className="text-xs font-bold text-rose-400 mt-2 font-mono" id="order-error-qty">
+                      {orderErrors.quantity}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                    STATUS FPKB
+                  </label>
+                  <select
+                    value={orderStatusFkb === 'Sudah Naik FKB' || orderStatusFkb === 'Sudah Naik FPKB' ? 'Sudah Naik FPKB' : 'Belum Naik FPKB'}
+                    onChange={(e) => setOrderStatusFkb(e.target.value as FkbStatus)}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                    id="select-unified-order-fkb"
+                  >
+                    <option value="Belum Naik FPKB" className="bg-slate-900 text-rose-400 font-bold py-2">Belum Naik FPKB</option>
+                    <option value="Sudah Naik FPKB" className="bg-slate-900 text-emerald-400 font-bold py-2">Sudah Naik FPKB</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Modal Footer / Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsOrderModalOpen(false)}
+                  className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
+                  id="btn-cancel-order-unified"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
+                  id="btn-save-order-unified"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  <span>{editingOrder ? 'Simpan Perubahan' : 'Simpan Order'}</span>
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </Modal>
+        </div>
+      )}
 
       {/* ========================================================================= */}
       {/* ======================== MODAL BARANG DATANG ============================ */}
@@ -912,13 +973,13 @@ export default function OrderDanBarangDatangView({
       <Modal
         isOpen={isGoodsModalOpen}
         onClose={() => setIsGoodsModalOpen(false)}
-        title={editingGoods ? 'Ubah Penerimaan Barang' : 'Log Penerimaan Barang Datang'}
-        maxWidth="3xl"
+        title={editingGoods ? 'UBAH PENERIMAAN BARANG' : 'LOG PENERIMAAN BARANG DATANG'}
+        maxWidth="md"
       >
-        <form onSubmit={handleSaveGoodsSubmit} className="space-y-5 font-sans" id="form-goods-unified">
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-emerald-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Tanggal Barang Datang / Rencana Datang <span className="text-rose-400">*</span>
+        <form onSubmit={handleSaveGoodsSubmit} className="space-y-6 font-mono text-sm" id="form-goods-unified">
+          <div>
+            <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+              Tanggal Barang Datang / Rencana Datang <span className="text-rose-400 font-bold">*</span>
             </label>
             <input
               type="date"
@@ -928,15 +989,15 @@ export default function OrderDanBarangDatangView({
                 setGoodsTanggal(val ? getIndonesianDate(val) : '');
                 setGoodsErrors({ ...goodsErrors, tanggalBarangDatang: '' });
               }}
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900 focus:border-emerald-400 focus:outline-hidden transition-all font-mono"
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner font-mono"
               id="input-unified-goods-date"
             />
-            {goodsErrors.tanggalBarangDatang && <p className="text-sm font-semibold text-rose-500 mt-0.5">{goodsErrors.tanggalBarangDatang}</p>}
+            {goodsErrors.tanggalBarangDatang && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{goodsErrors.tanggalBarangDatang}</p>}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-emerald-300 uppercase tracking-wider font-mono flex items-center gap-1">
-              Nama Barang <span className="text-rose-400">*</span>
+          <div>
+            <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+              Nama Barang <span className="text-rose-400 font-bold">*</span>
             </label>
             <input
               type="text"
@@ -946,16 +1007,16 @@ export default function OrderDanBarangDatangView({
                 setGoodsErrors({ ...goodsErrors, namaBarang: '' });
               }}
               placeholder="Contoh: Lampu Xenon, Filter AC..."
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900 focus:border-emerald-400 focus:outline-hidden transition-all placeholder:text-slate-500"
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
               id="input-unified-goods-name"
             />
-            {goodsErrors.namaBarang && <p className="text-sm font-semibold text-rose-500 mt-0.5">{goodsErrors.namaBarang}</p>}
+            {goodsErrors.namaBarang && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{goodsErrors.namaBarang}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-emerald-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                Quantity Diterima <span className="text-rose-400">*</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                Quantity Diterima <span className="text-rose-400 font-bold">*</span>
               </label>
               <input
                 type="number"
@@ -965,20 +1026,20 @@ export default function OrderDanBarangDatangView({
                   setGoodsQty(Number(e.target.value));
                   setGoodsErrors({ ...goodsErrors, quantity: '' });
                 }}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-emerald-300 bg-slate-900 focus:border-emerald-400 focus:outline-hidden transition-all text-center font-mono"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all text-center font-mono shadow-inner"
                 id="input-unified-goods-qty"
               />
-              {goodsErrors.quantity && <p className="text-sm font-semibold text-rose-500 mt-0.5">{goodsErrors.quantity}</p>}
+              {goodsErrors.quantity && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{goodsErrors.quantity}</p>}
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-emerald-300 uppercase tracking-wider font-mono">
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                 Status Transit
               </label>
               <select
                 value={goodsStatus}
                 onChange={(e) => setGoodsStatus(e.target.value as BarangStatus)}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900 focus:border-emerald-400 focus:outline-hidden transition-all cursor-pointer font-mono"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
                 id="select-unified-goods-status"
               >
                 <option value="Belum Dateng" className="text-slate-100 bg-slate-900">Belum Dateng</option>
@@ -988,40 +1049,41 @@ export default function OrderDanBarangDatangView({
             </div>
           </div>
 
-          <div className="space-y-1.5 p-4 rounded-xl bg-slate-900/90 border border-slate-700">
-            <div className="flex items-center gap-3">
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 shadow-inner">
+            <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={goodsSesuaiOrder}
                 onChange={(e) => setGoodsSesuaiOrder(e.target.checked)}
-                className="h-5 w-5 text-emerald-600 focus:ring-emerald-500 rounded-sm border-gray-300 cursor-pointer"
+                className="h-5 w-5 rounded-md border-slate-700 bg-slate-950 text-amber-500 focus:ring-amber-400 focus:ring-offset-slate-900 cursor-pointer accent-amber-500"
                 id="checkbox-unified-goods-matching"
               />
               <div>
-                <label htmlFor="checkbox-unified-goods-matching" className="text-base md:text-lg font-black text-white cursor-pointer">
+                <span className="text-sm font-bold text-white block">
                   Kesesuaian Spesifikasi &amp; Jumlah
-                </label>
-                <p className="text-xs md:text-sm text-slate-300 font-medium leading-normal">
+                </span>
+                <span className="text-xs text-slate-400 font-normal">
                   Centang jika jumlah barang dan spesifikasi fisik sesuai dengan pesanan / FKB.
-                </p>
+                </span>
               </div>
-            </div>
+            </label>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
             <button
               type="button"
               onClick={() => setIsGoodsModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
+              className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-400/50 px-6 py-2.5 text-sm md:text-base font-black text-white active:scale-95 shadow-[0_0_15px_rgba(16,185,129,0.4)] transition-all cursor-pointer"
+              className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
               id="btn-save-goods-unified"
             >
-              <Check className="h-4 w-4" /> Simpan
+              <CheckCircle2 className="h-5 w-5" />
+              <span>Simpan Penerimaan</span>
             </button>
           </div>
         </form>

@@ -28,6 +28,7 @@ import {
   BeritaAcaraDraft,
   IpDevice,
   ReportHistoryItem,
+  JadwalFilmItem,
   INITIAL_AREAS,
   INITIAL_EQUIPMENT,
   INITIAL_PR_ENGINEERING,
@@ -58,6 +59,7 @@ class FirestoreDatabase {
   private riwayat: RiwayatEquipment[] = [];
   private filmUploads: FilmUpload[] = [];
   private weeklyReports: WeeklyReport[] = [];
+  private jadwalFilm: JadwalFilmItem[] = [];
   private ipDevices: IpDevice[] = [];
   private ipAreas: string[] = INITIAL_IP_AREAS;
   private ipCategories: string[] = INITIAL_IP_CATEGORIES;
@@ -94,7 +96,28 @@ class FirestoreDatabase {
       this.barangDatang = getCached('barang_datang', INITIAL_BARANG_DATANG);
       this.riwayat = getCached('riwayat', INITIAL_RIWAYAT);
       this.filmUploads = getCached('film_uploads', INITIAL_FILM_UPLOAD);
-      this.weeklyReports = getCached('weekly_reports', []);
+      const cachedReports = getCached<WeeklyReport[]>('weekly_reports', []);
+      this.weeklyReports = cachedReports.filter((r) => {
+        try {
+          const parsed = JSON.parse(r.report_json);
+          const films = parsed.films || [];
+          const isMockDump =
+            (films.length === 34 && films.every((f: any) => f.id?.startsWith('flm-'))) ||
+            (films.length <= 4 && films.every((f: any) => f.id?.startsWith('film-')) && !parsed.is_imported);
+          return !isMockDump;
+        } catch {
+          return true;
+        }
+      });
+      let initialJadwal: JadwalFilmItem[] = [];
+      try {
+        const legacyJadwal = localStorage.getItem('xxi_jadwal_film');
+        if (legacyJadwal) {
+          const parsedLegacy = JSON.parse(legacyJadwal);
+          if (Array.isArray(parsedLegacy)) initialJadwal = parsedLegacy;
+        }
+      } catch (_) {}
+      this.jadwalFilm = getCached('jadwal_film', initialJadwal);
       this.ipDevices = getCached('ip_devices', INITIAL_IP_DEVICES);
       this.ipAreas = getCached('ip_areas', INITIAL_IP_AREAS);
       this.ipCategories = getCached('ip_categories', INITIAL_IP_CATEGORIES);
@@ -412,6 +435,27 @@ class FirestoreDatabase {
       }
     );
     this.unsubscribers.push(unsubReports);
+
+    // 9b. Jadwal Film Realtime Listener
+    const unsubJadwal = onSnapshot(
+      collection(firestore, 'jadwal_film'),
+      (snapshot) => {
+        const docs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as JadwalFilmItem));
+        if (docs.length > 0 || this.jadwalFilm.length === 0) {
+          this.jadwalFilm = docs;
+          this.saveToCache('jadwal_film', this.jadwalFilm);
+          try {
+            localStorage.setItem('xxi_jadwal_film', JSON.stringify(this.jadwalFilm));
+            window.dispatchEvent(new CustomEvent('xxi_jadwal_film_updated', { detail: this.jadwalFilm }));
+          } catch (_) {}
+          this.notify();
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'jadwal_film');
+      }
+    );
+    this.unsubscribers.push(unsubJadwal);
 
     // 10. IP Devices Realtime Listener
     const unsubIp = onSnapshot(
@@ -846,9 +890,19 @@ class FirestoreDatabase {
     this.notify();
 
     try {
-      await setDoc(doc(firestore, 'weekly_reports', id), payload, { merge: true });
+      console.log('[IMPORT] START FIRESTORE WRITE to weekly_reports/' + id);
+      // Execute Firestore write with a safety timeout so offline stream retries never hang the Promise forever
+      await Promise.race([
+        setDoc(doc(firestore, 'weekly_reports', id), payload, { merge: true }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Firestore write timeout or offline')), 2500)
+        )
+      ]);
+      console.log('[IMPORT] FIRESTORE WRITE COMPLETE');
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `weekly_reports/${id}`);
+      console.warn('[IMPORT] Firestore setDoc warning (local cache saved):', error);
+      // We do not rethrow so that if Firestore backend is offline/disconnected,
+      // the application can continue cleanly with local persistence
     }
   }
 
@@ -858,9 +912,58 @@ class FirestoreDatabase {
     this.notify();
 
     try {
-      await deleteDoc(doc(firestore, 'weekly_reports', id));
+      await Promise.race([
+        deleteDoc(doc(firestore, 'weekly_reports', id)),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Firestore delete timeout or offline')), 2500)
+        )
+      ]);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `weekly_reports/${id}`);
+      console.warn('Firestore delete error (local cache updated):', error);
+    }
+  }
+
+  // --- JADWAL FILM CRUD (Firestore Primary) ---
+  getJadwalFilm(): JadwalFilmItem[] {
+    return this.jadwalFilm;
+  }
+
+  async saveJadwalFilm(item: JadwalFilmItem): Promise<void> {
+    const id = item.id || `jdw-${Date.now()}`;
+    const payload: JadwalFilmItem = { ...item, id };
+    const index = this.jadwalFilm.findIndex((x) => x.id === id);
+    if (index > -1) {
+      this.jadwalFilm[index] = payload;
+    } else {
+      this.jadwalFilm.unshift(payload);
+    }
+    this.saveToCache('jadwal_film', this.jadwalFilm);
+    try {
+      localStorage.setItem('xxi_jadwal_film', JSON.stringify(this.jadwalFilm));
+      window.dispatchEvent(new CustomEvent('xxi_jadwal_film_updated', { detail: this.jadwalFilm }));
+    } catch (_) {}
+    this.notify();
+
+    try {
+      await setDoc(doc(firestore, 'jadwal_film', id), payload, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `jadwal_film/${id}`);
+    }
+  }
+
+  async deleteJadwalFilm(id: string): Promise<void> {
+    this.jadwalFilm = this.jadwalFilm.filter((x) => x.id !== id);
+    this.saveToCache('jadwal_film', this.jadwalFilm);
+    try {
+      localStorage.setItem('xxi_jadwal_film', JSON.stringify(this.jadwalFilm));
+      window.dispatchEvent(new CustomEvent('xxi_jadwal_film_updated', { detail: this.jadwalFilm }));
+    } catch (_) {}
+    this.notify();
+
+    try {
+      await deleteDoc(doc(firestore, 'jadwal_film', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `jadwal_film/${id}`);
     }
   }
 
@@ -1072,6 +1175,7 @@ class FirestoreDatabase {
       riwayat: this.getRiwayat(),
       filmUploads: this.getFilmUploads(),
       weeklyReports: this.getWeeklyReports(),
+      jadwalFilm: this.getJadwalFilm(),
       branding: this.getBranding()
     };
     return JSON.stringify(payload, null, 2);
@@ -1130,4 +1234,5 @@ class FirestoreDatabase {
 }
 
 export const firestoreDb = new FirestoreDatabase();
+export const db = firestoreDb;
 export default firestoreDb;

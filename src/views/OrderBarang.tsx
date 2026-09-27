@@ -290,14 +290,14 @@ export default function OrderBarangView({ orders, onSave, onDelete }: OrderBaran
 
       {/* Form Modal (RAPOT STD MASTER DESIGN) */}
       {isModalOpen && (
-        <div
+        <div 
           className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
           id="modal-order-overlay"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsModalOpen(false);
           }}
         >
-          <div
+          <div 
             className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl sm:max-w-3xl w-full p-6 sm:p-8 text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] animate-scale-in my-auto max-h-[92vh] overflow-y-auto"
             id="modal-order-card"
           >

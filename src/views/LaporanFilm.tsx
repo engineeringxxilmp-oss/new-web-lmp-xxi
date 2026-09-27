@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { FilmUpload, SystemBranding, WeeklyReport } from '../types';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { FilmUpload, SystemBranding, WeeklyReport, ServerConfigItem, DEFAULT_SERVER_CONFIGS, JadwalFilmItem } from '../types';
 import db from '../db/localDb';
 import { getIndonesianDate, toISODate } from './PrEngineering';
+import { normalizeFilmTitle } from '../components/rapotFilm/JadwalFilmScannerView';
 import {
   FileText,
   Play,
@@ -25,15 +26,30 @@ import {
   FileCode,
   Filter,
   Search,
-  Download
+  Download,
+  Share2,
+  Mail,
+  HardDrive,
+  Save,
+  Server,
+  Check,
+  Cloud,
+  UploadCloud,
+  Sparkles,
+  Edit2,
+  X,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { toJpeg } from 'html-to-image';
 
-interface LaporanFilmProps {
+export interface LaporanFilmProps {
   filmUploads: FilmUpload[];
   branding: SystemBranding;
+  importNotice?: string | null;
+  onClearImportNotice?: () => void;
 }
 
 interface GeneratedFilm {
@@ -65,38 +81,215 @@ function getFormattedFormat(format: string): string {
   return format || '2D';
 }
 
-function getFormattedKdm(film: GeneratedFilm | FilmUpload): string {
-  const statusTayang = film.status_tayang || ('status_tayang' in film ? film.status_tayang : '');
-  if (statusTayang !== 'SEDANG TAYANG') {
-    return 'TIDAK ADA';
-  }
+export function getFormattedKdm(film: GeneratedFilm | FilmUpload): string {
   const kdm = ('status_kdm' in film ? film.status_kdm : ('kdm' in film ? film.kdm : '')) || '';
-  if (kdm === 'Tidak Ada' || kdm === 'Expired' || !kdm) {
-    return 'TIDAK ADA';
+  const clean = kdm.replace(/^KDM:\s*/i, '').trim();
+  const upper = clean.toUpperCase();
+
+  if (upper === 'AKTIF') {
+    return 'KDM: AKTIF';
   }
-  if (kdm === 'Aktif') {
-    return 'Mon May 11 2026';
+  if (upper === 'TIDAK AKTIF' || upper === 'TIDAK ADA' || upper === 'EXPIRED' || !clean) {
+    return 'KDM: TIDAK AKTIF';
   }
-  
-  const iso = toISODate(kdm);
-  if (iso) {
-    try {
-      const parts = iso.split('-');
-      const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate().toString().padStart(2, '0')} ${d.getFullYear()}`;
-    } catch (e) {}
-  }
-  return kdm;
+
+  // If user entered a manual date like 30-09-2026
+  return `KDM: ${clean}`;
 }
 
-export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps) {
+// Helper to format period string with 's/d' instead of hyphens for official messages
+export const formatPeriodWithSd = (periode: string): string => {
+  if (!periode) return '';
+  return periode.replace(/\s*(?:[-–—]|s\/d|sd|sampai)\s*/i, ' s/d ');
+};
+
+// Helper to extract ISO date boundaries from period string e.g. "21 September 2026 - 27 September 2026"
+export const parsePeriodToIsoRange = (periodStr: string): { startIso: string; endIso: string } | null => {
+  if (!periodStr || periodStr === 'Semua Periode') return null;
+  const parts = periodStr.split(/\s*(?:[-–—]|s\/d|sd|sampai)\s*/i);
+  if (parts.length >= 2) {
+    const startIso = toISODate(parts[0].trim());
+    const endIso = toISODate(parts[1].trim());
+    if (startIso && endIso) {
+      return { startIso, endIso };
+    }
+  }
+  return null;
+};
+
+// Check if a film exists in the Jadwal Film scanner history for the specified period
+export const checkFilmScheduleStatus = (
+  film: { judul_film: string; singkatan_film?: string },
+  schedules: JadwalFilmItem[],
+  periodStr: string
+): { isDetected: boolean; studio?: string } => {
+  const normMaster = normalizeFilmTitle(film.judul_film);
+  const normSingkatan = film.singkatan_film ? normalizeFilmTitle(film.singkatan_film) : '';
+  if (!normMaster) return { isDetected: false };
+
+  const range = parsePeriodToIsoRange(periodStr);
+
+  const periodSchedules = schedules.filter((s) => {
+    if (!range) return true; // 'Semua Periode' includes all schedule snapshots
+    const dateStr = s.tanggal || s.tanggalJadwal || '';
+    const iso = toISODate(dateStr);
+    if (!iso) return true; // Include if date parsing is ambiguous to prevent dropping valid data
+    return iso >= range.startIso && iso <= range.endIso;
+  });
+
+  for (const item of periodSchedules) {
+    const titles = item.judulTerdeteksi || item.detectedTitles || [];
+    for (const rawTitle of titles) {
+      if (typeof rawTitle !== 'string') continue;
+
+      const normDetected = normalizeFilmTitle(rawTitle);
+      if (!normDetected) continue;
+
+      const isExact = normMaster === normDetected;
+      const isSingkatan = normSingkatan && normSingkatan.length >= 2 && normSingkatan === normDetected;
+      const isWordMatch =
+        normDetected === normMaster ||
+        normDetected.split(' ').includes(normMaster) ||
+        normMaster.split(' ').includes(normDetected) ||
+        (normMaster.length >= 3 && normDetected.includes(normMaster)) ||
+        (normDetected.length >= 3 && normMaster.includes(normDetected));
+
+      if (isExact || isSingkatan || isWordMatch) {
+        let studioFound = item.studio;
+        const matchStudio = rawTitle.match(/(?:Studio\s*[1-8]|Premiere\s*[1-2]|Studio\s*Premiere\s*[1-2])/i);
+        if (matchStudio) {
+          studioFound = matchStudio[0].trim();
+        }
+        let formattedStudio: string | undefined;
+        if (studioFound) {
+          const trimmed = studioFound.trim();
+          formattedStudio = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+        }
+        return {
+          isDetected: true,
+          studio: formattedStudio
+        };
+      }
+    }
+  }
+
+  return { isDetected: false };
+};
+
+// Helper to format date into Monday-Sunday week range string
+export const getMonday = (d: Date): Date => {
+  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(date.setDate(diff));
+};
+
+export const getWeekRangeString = (dateStr: string): string => {
+  let iso = toISODate(dateStr);
+  if (!iso) {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    iso = `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
+  }
+  const parts = iso.split('-');
+  const date = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  const monday = getMonday(date);
+  const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+
+  const formatDate = (d: Date) => {
+    const months = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
+  return `${formatDate(monday)} - ${formatDate(sunday)}`;
+};
+
+export const formatCustomPeriod = (startIso: string, endIso: string): string => {
+  if (!startIso) return getWeekRangeString(getIndonesianDate());
+  if (!endIso) endIso = startIso;
+
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+
+  const parse = (iso: string) => {
+    const p = iso.split('-');
+    return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  };
+
+  const d1 = parse(startIso);
+  const d2 = parse(endIso);
+
+  const formatD = (d: Date) => `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+
+  if (startIso === endIso) {
+    return formatD(d1);
+  }
+  return `${formatD(d1)} - ${formatD(d2)}`;
+};
+
+export default function LaporanFilm({
+  filmUploads,
+  branding,
+  importNotice,
+  onClearImportNotice
+}: LaporanFilmProps) {
+  const currentWeekStr = getWeekRangeString(getIndonesianDate());
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
-  const [selectedWeek, setSelectedWeek] = useState('');
+  const [selectedWeek, setSelectedWeek] = useState(currentWeekStr);
   const [activeReport, setActiveReport] = useState<WeeklyReport | null>(null);
   const [showPreview, setShowPreview] = useState(true);
   const [showConfig, setShowConfig] = useState(false);
+
+  // Flexible Date Range Picker States (Single Day, Weekly, Monthly, or Custom)
+  const toYmd = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const today = new Date();
+  const [startDateInput, setStartDateInput] = useState<string>(() => {
+    const mon = getMonday(today);
+    return toYmd(mon);
+  });
+  const [endDateInput, setEndDateInput] = useState<string>(() => {
+    const mon = getMonday(today);
+    const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+    return toYmd(sun);
+  });
+
+  const handleDateRangeChange = (start: string, end: string) => {
+    setStartDateInput(start);
+    setEndDateInput(end);
+    const formatted = formatCustomPeriod(start, end);
+    setSelectedWeek(formatted);
+  };
+
+  const setPresetToday = () => {
+    const todayStr = toYmd(new Date());
+    handleDateRangeChange(todayStr, todayStr);
+  };
+
+  const setPresetThisWeek = () => {
+    const mon = getMonday(new Date());
+    const sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 6);
+    handleDateRangeChange(toYmd(mon), toYmd(sun));
+  };
+
+  const setPresetThisMonth = () => {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    handleDateRangeChange(toYmd(firstDay), toYmd(lastDay));
+  };
 
   // Loading States
   const [isLoading, setIsLoading] = useState(false);
@@ -110,12 +303,108 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
   // Custom Editable Notes for active report
   const [customNotes, setCustomNotes] = useState('');
 
-  // Print & Report Configurations
-  const [pembuatLaporan, setPembuatLaporan] = useState('Alamsyah');
-  const [jabatanPembuat, setJabatanPembuat] = useState('Opr');
-  const [mengetahui, setMengetahui] = useState('Ikmalia');
-  const [jabatanMengetahui, setJabatanMengetahui] = useState('Manager Bioskop');
-  const [nomorDokumen, setNomorDokumen] = useState('XXI/LMP/ENG/2026/004');
+  // Print & Report Configurations (Persisted in localStorage)
+  const [pembuatLaporan, setPembuatLaporan] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_laporan_print_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.pembuatLaporan) return parsed.pembuatLaporan;
+      }
+    } catch (_) {}
+    return 'Alamsyah';
+  });
+  const [jabatanPembuat, setJabatanPembuat] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_laporan_print_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.jabatanPembuat) return parsed.jabatanPembuat;
+      }
+    } catch (_) {}
+    return 'Opr';
+  });
+  const [mengetahui, setMengetahui] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_laporan_print_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.mengetahui) return parsed.mengetahui;
+      }
+    } catch (_) {}
+    return 'Ikmalia';
+  });
+  const [jabatanMengetahui, setJabatanMengetahui] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_laporan_print_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.jabatanMengetahui) return parsed.jabatanMengetahui;
+      }
+    } catch (_) {}
+    return 'Manager Bioskop';
+  });
+  const [nomorDokumen, setNomorDokumen] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_laporan_print_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.nomorDokumen) return parsed.nomorDokumen;
+      }
+    } catch (_) {}
+    return 'XXI/LMP/ENG/2026/004';
+  });
+
+  // Draft states for the Konfigurasi Cetak panel
+  const [draftPembuatLaporan, setDraftPembuatLaporan] = useState(pembuatLaporan);
+  const [draftJabatanPembuat, setDraftJabatanPembuat] = useState(jabatanPembuat);
+  const [draftMengetahui, setDraftMengetahui] = useState(mengetahui);
+  const [draftJabatanMengetahui, setDraftJabatanMengetahui] = useState(jabatanMengetahui);
+  const [draftNomorDokumen, setDraftNomorDokumen] = useState(nomorDokumen);
+
+  const handleOpenConfig = () => {
+    setDraftPembuatLaporan(pembuatLaporan);
+    setDraftJabatanPembuat(jabatanPembuat);
+    setDraftMengetahui(mengetahui);
+    setDraftJabatanMengetahui(jabatanMengetahui);
+    setDraftNomorDokumen(nomorDokumen);
+    setShowConfig(!showConfig);
+  };
+
+  const handleCancelConfig = () => {
+    setDraftPembuatLaporan(pembuatLaporan);
+    setDraftJabatanPembuat(jabatanPembuat);
+    setDraftMengetahui(mengetahui);
+    setDraftJabatanMengetahui(jabatanMengetahui);
+    setDraftNomorDokumen(nomorDokumen);
+    setShowConfig(false);
+  };
+
+  const handleApplyConfig = () => {
+    setPembuatLaporan(draftPembuatLaporan);
+    setJabatanPembuat(draftJabatanPembuat);
+    setMengetahui(draftMengetahui);
+    setJabatanMengetahui(draftJabatanMengetahui);
+    setNomorDokumen(draftNomorDokumen);
+
+    const cfg = {
+      pembuatLaporan: draftPembuatLaporan,
+      jabatanPembuat: draftJabatanPembuat,
+      mengetahui: draftMengetahui,
+      jabatanMengetahui: draftJabatanMengetahui,
+      nomorDokumen: draftNomorDokumen
+    };
+
+    try {
+      localStorage.setItem('xxi_laporan_print_config', JSON.stringify(cfg));
+    } catch (_) {}
+
+    // Invalidate cached master PDF so new preview & downloads immediately use updated names
+    masterPdfRef.current = null;
+
+    // Otomatis menutup panel konfigurasi
+    setShowConfig(false);
+  };
 
   // Table Filtering States inside Report View
   const [reportSearchQuery, setReportSearchQuery] = useState('');
@@ -123,45 +412,106 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
   const [reportFilterStatusTayang, setReportFilterStatusTayang] = useState('ALL');
   const [reportFilterStatusKdm, setReportFilterStatusKdm] = useState('ALL');
 
-  // Week Grouping Logic
-  const getMonday = (d: Date): Date => {
-    const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.setDate(diff));
+  // Checkbox & Bulk Delete State (Requirement H)
+  const [selectedReportFilmIds, setSelectedReportFilmIds] = useState<Record<string, boolean>>({});
+
+  // Manual KDM date editing state
+  const [editingKdmFilmId, setEditingKdmFilmId] = useState<string | null>(null);
+  const [kdmDateInput, setKdmDateInput] = useState<string>('30-09-2026');
+
+  // Server storage configs (Studio 1-8, Premiere 1-2, Library / AHM)
+  const [serverConfigs, setServerConfigs] = useState<ServerConfigItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('xxi_server_configs');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return DEFAULT_SERVER_CONFIGS;
+  });
+  const [serverConfigSaveMsg, setServerConfigSaveMsg] = useState<string | null>(null);
+
+  const handleUpdateServerConfig = (id: string, field: 'name' | 'capacityTb', val: string) => {
+    const updated = serverConfigs.map((s) => (s.id === id ? { ...s, [field]: val } : s));
+    setServerConfigs(updated);
+    try {
+      localStorage.setItem('xxi_server_configs', JSON.stringify(updated));
+      setServerConfigSaveMsg('Tersimpan');
+      setTimeout(() => setServerConfigSaveMsg(null), 2000);
+    } catch (_) {}
   };
 
-  const getWeekRangeString = (dateStr: string): string => {
-    let iso = toISODate(dateStr);
-    if (!iso) {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = now.getMonth() + 1;
-      const d = now.getDate();
-      iso = `${y}-${m < 10 ? '0' + m : m}-${d < 10 ? '0' + d : d}`;
-    }
-    const parts = iso.split('-');
-    const date = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-    const monday = getMonday(date);
-    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+  const handleResetServerConfig = () => {
+    setServerConfigs(DEFAULT_SERVER_CONFIGS);
+    try {
+      localStorage.setItem('xxi_server_configs', JSON.stringify(DEFAULT_SERVER_CONFIGS));
+      setServerConfigSaveMsg('Reset Default');
+      setTimeout(() => setServerConfigSaveMsg(null), 2000);
+    } catch (_) {}
+  };
 
-    const formatDate = (d: Date) => {
-      const months = [
-        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
-      ];
-      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  // Schedule History from Jadwal Film Scanner (Synchronized with localDb & Firestore)
+  const [scheduleHistory, setScheduleHistory] = useState<JadwalFilmItem[]>(() => {
+    try {
+      const fromDb = db.getJadwalFilm();
+      if (Array.isArray(fromDb) && fromDb.length > 0) return fromDb;
+      const saved = localStorage.getItem('xxi_jadwal_film');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const fromDb = db.getJadwalFilm();
+        if (Array.isArray(fromDb) && fromDb.length > 0) {
+          setScheduleHistory(fromDb);
+          return;
+        }
+        const saved = localStorage.getItem('xxi_jadwal_film');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setScheduleHistory(parsed);
+          }
+        }
+      } catch (_) {}
     };
 
-    return `${formatDate(monday)} - ${formatDate(sunday)}`;
-  };
+    window.addEventListener('xxi_jadwal_film_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+    const unsub = db.subscribe(handleSync);
+    handleSync();
 
-  // Extract available weeks dynamically from uploads
-  const weekRangesRaw = Array.from(new Set(filmUploads.map(f => getWeekRangeString(f.tanggal_terima))))
-    .filter(w => w !== 'Lainnya')
-    .sort((a, b) => b.localeCompare(a)); // Descending chronological order
+    return () => {
+      window.removeEventListener('xxi_jadwal_film_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+      unsub();
+    };
+  }, []);
 
-  const weekRanges = weekRangesRaw.length > 0 ? ['Semua Periode', ...weekRangesRaw] : [];
+  // Master PDF reference - single source of truth for Preview, Download, WhatsApp, and Gmail
+  const masterPdfRef = useRef<{ file: File; blob: Blob; filename: string; blobUrl: string } | null>(null);
+
+  // Invalidate cached master PDF cleanly when activeReport changes without touching live DOM
+  useEffect(() => {
+    masterPdfRef.current = null;
+  }, [activeReport?.id, activeReport?.periode, activeReport?.report_json]);
+
+  // Extract available weeks dynamically from saved weekly reports and current week (Never from Master Film)
+  const weekRanges = useMemo(() => {
+    return Array.from(new Set([
+      currentWeekStr,
+      ...weeklyReports.map(r => r.periode)
+    ]))
+      .filter(w => w && w !== 'Lainnya' && w !== 'Semua Periode')
+      .sort((a, b) => b.localeCompare(a)); // Descending chronological order
+  }, [currentWeekStr, weeklyReports]);
 
   // Fetch saved weekly reports on mount and when db changes
   const loadReportsFromDb = () => {
@@ -176,16 +526,25 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
     return unsub;
   }, []);
 
+  // Sync selected week and refresh report data when importNotice arrives or when week ranges initialize
+  useEffect(() => {
+    if (importNotice) {
+      loadReportsFromDb();
+      setSelectedWeek(currentWeekStr);
+      setShowPreview(true);
+    }
+  }, [importNotice, currentWeekStr]);
+
   // Set default week on mount or when week ranges load
   useEffect(() => {
-    if (weekRanges.length > 0 && !selectedWeek) {
-      setSelectedWeek(weekRanges[0]);
+    if (weekRanges.length > 0 && (!selectedWeek || selectedWeek === 'Semua Periode')) {
+      setSelectedWeek(weekRanges.includes(currentWeekStr) ? currentWeekStr : weekRanges[0]);
     }
-  }, [weekRanges, selectedWeek]);
+  }, [weekRanges, selectedWeek, currentWeekStr]);
 
   // Set active report when selected week or weekly reports change safely without causing an infinite render loop
   useEffect(() => {
-    if (!selectedWeek || filmUploads.length === 0) {
+    if (!selectedWeek) {
       setActiveReport(null);
       setCustomNotes('');
       return;
@@ -193,18 +552,25 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
 
     const existingReport = weeklyReports.find(r => r.periode === selectedWeek);
     if (existingReport) {
-      setActiveReport(existingReport);
+      setActiveReport(prev => {
+        if (prev && prev.id === existingReport.id && prev.report_json === existingReport.report_json) {
+          return prev;
+        }
+        return existingReport;
+      });
       try {
         const parsed = JSON.parse(existingReport.report_json) as ReportPayload;
-        setCustomNotes(parsed.notes || 'Seluruh DCP Cinema XXI telah terverifikasi dan siap ditayangkan.');
+        const notes = parsed.notes || 'Seluruh DCP Cinema XXI telah terverifikasi dan siap ditayangkan.';
+        setCustomNotes(prev => (prev === notes ? prev : notes));
       } catch {
-        setCustomNotes('Seluruh DCP Cinema XXI telah terverifikasi dan siap ditayangkan.');
+        const defaultNotes = 'Seluruh DCP Cinema XXI telah terverifikasi dan siap ditayangkan.';
+        setCustomNotes(prev => (prev === defaultNotes ? prev : defaultNotes));
       }
     } else {
       setActiveReport(null);
       setCustomNotes('');
     }
-  }, [selectedWeek, filmUploads, weeklyReports]);
+  }, [selectedWeek, weeklyReports]);
 
   // Handle live Notes changes saved to the active report in db
   const handleSaveNotes = (notesText: string) => {
@@ -245,14 +611,16 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
     return `${base + variance} GB`;
   };
 
-  // Start Generation sequence
+  // Start Generation sequence (Only refreshes currently imported films, NEVER auto-populates from Master Film Tahunan)
   const handleGenerateReport = async () => {
     if (!selectedWeek) return;
 
-    const filteredFilms = selectedWeek === 'Semua Periode'
-      ? filmUploads
-      : filmUploads.filter(f => getWeekRangeString(f.tanggal_terima) === selectedWeek);
-    if (filteredFilms.length === 0) return;
+    if (reportFilms.length === 0) {
+      alert('Belum ada film yang di-import ke Laporan Film.\n\nSilakan pilih film di menu "Seleksi Film Laporan" lalu klik tombol "IMPORT KE LAPORAN FILM".');
+      return;
+    }
+
+    const filteredFilms = reportFilms;
 
     // Trigger loading animation steps
     setIsLoading(true);
@@ -284,8 +652,8 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
     };
 
     const sortedFilms = [...filteredFilms].sort((a, b) => {
-      const orderA = statusOrder[a.status_tayang.toUpperCase()] || 4;
-      const orderB = statusOrder[b.status_tayang.toUpperCase()] || 4;
+      const orderA = statusOrder[(a.status_tayang || '').toUpperCase()] || 4;
+      const orderB = statusOrder[(b.status_tayang || '').toUpperCase()] || 4;
       if (orderA !== orderB) {
         return orderA - orderB;
       }
@@ -293,28 +661,36 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
     });
 
     const generatedFilms: GeneratedFilm[] = sortedFilms.map((film, index) => {
-      // Check if keterangan contains studio number
-      const matchStudio = film.keterangan.match(/Studio\s*([1-8])/i);
-      const studio = matchStudio ? `Studio ${matchStudio[1]}` : `Studio ${(index % 3) + 1}`;
+      let studio = `Studio ${(index % 3) + 1}`;
+      const matchStudio = film.keterangan ? film.keterangan.match(/Studio\s*([1-8]|Premiere\s*[1-2])/i) : null;
+      if (matchStudio) {
+        studio = matchStudio[0];
+      }
 
-      const status_upload = film.status_tayang === 'BELUM TAYANG' ? 'Proses (80%)' : 'Berhasil';
+      // Strictly Manual Status: 1. Belum Tayang, 2. Sedang Tayang, 3. Sudah Tayang
+      let currentStatusTayang = (film.status_tayang || 'BELUM TAYANG').toUpperCase();
+      if (!['BELUM TAYANG', 'SEDANG TAYANG', 'SUDAH TAYANG'].includes(currentStatusTayang)) {
+        currentStatusTayang = 'BELUM TAYANG';
+      }
+
+      const status_upload = currentStatusTayang === 'BELUM TAYANG' ? 'Proses (80%)' : 'Berhasil';
       const status_dcp = 'Lengkap';
       const ukuran_file = getStableSize(film.id, film.format_film);
 
       return {
         id: film.id,
-        judul_film: film.judul_film,
+        judul_film: (film.judul_film || '').toUpperCase().trim(),
         studio,
         format_film: film.format_film,
         format_sound: film.format_sound,
-        cpl: film.singkatan_film || film.judul_film.substring(0, 3).toUpperCase(),
-        kdm: film.status_kdm,
+        cpl: ((film.cpl || (film as any).singkatan_film || film.judul_film.substring(0, 3)) || '').toUpperCase().trim(),
+        kdm: film.kdm || (film as any).status_kdm || 'Aktif',
         status_upload,
         status_dcp,
-        tanggal_upload: film.tanggal_terima,
+        tanggal_upload: film.tanggal_upload || (film as any).tanggal_terima || new Date().toISOString().split('T')[0],
         ukuran_file,
-        keterangan: film.keterangan,
-        status_tayang: film.status_tayang
+        keterangan: film.keterangan || '',
+        status_tayang: currentStatusTayang
       };
     });
 
@@ -359,26 +735,30 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
 
   // Delete generated report from DB to restart
   const handleDeleteReport = (id: string) => {
-    if (confirm('Apakah Anda yakin ingin menghapus laporan ini dan mengembalikan ke draft?')) {
+    if (confirm('Apakah Anda yakin ingin menghapus data Laporan Film periode ini dan mengembalikan ke kondisi kosong?')) {
       db.deleteWeeklyReport(id);
       setWeeklyReports(db.getWeeklyReports());
+      setActiveReport(null);
+      masterPdfRef.current = null;
+      try {
+        localStorage.removeItem('xxi_selected_laporan_films');
+        localStorage.removeItem('xxi_has_imported_to_laporan');
+      } catch (_) {}
     }
   };
 
-  // PDF Direct Exporter
-  const handleExportPdf = async () => {
-    if (!activeReport) return;
-    
-    // Track original preview state to restore later
+  // Master PDF Generation: Creates a single source-of-truth PDF used for Preview, Download, WhatsApp, and Gmail
+  const generateMasterPdf = async (silent = false): Promise<{ file: File; blob: Blob; filename: string; blobUrl: string } | null> => {
+    if (masterPdfRef.current && masterPdfRef.current.file) {
+      return masterPdfRef.current;
+    }
+
     const originalPreviewState = showPreview;
-    
-    // Save original scroll position
     const scrollX = window.scrollX;
     const scrollY = window.scrollY;
-    
-    // Find the wrapper element that hides/off-screens the printable area
+
     const wrapperEl = document.getElementById('printable-area-outer')?.parentElement as HTMLElement | null;
-    
+
     let wrapperOriginalPosition = '';
     let wrapperOriginalLeft = '';
     let wrapperOriginalTop = '';
@@ -395,31 +775,33 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
     const originalStylesText: { el: HTMLStyleElement; text: string }[] = [];
 
     try {
-      setExportPdfSuccess(false);
-      setPdfDownloadUrl(null);
-      setIsExportingPdf(true);
-      setLoadingStep('Mempersiapkan dokumen PDF...');
-      setLoadingProgress(10);
+      if (!silent) {
+        setExportPdfSuccess(false);
+        setIsExportingPdf(true);
+        setLoadingStep('Mempersiapkan dokumen PDF Master...');
+        setLoadingProgress(10);
+      }
 
-      // Force preview to be true so the printable element is mounted and rendered in the DOM
       if (!showPreview) {
         setShowPreview(true);
-        // Wait for React to render the printable-paper-view fully
         await new Promise(r => setTimeout(r, 250));
       }
 
       const original = document.getElementById('printable-paper-view');
       if (!original) {
         setShowPreview(originalPreviewState);
-        setIsExportingPdf(false);
-        alert('Elemen laporan tidak ditemukan di dalam halaman.');
-        return;
+        if (!silent) {
+          setIsExportingPdf(false);
+          alert('Elemen laporan tidak ditemukan di dalam halaman.');
+        }
+        return null;
       }
 
-      setLoadingProgress(25);
-      setLoadingStep('Merender halaman laporan...');
+      if (!silent) {
+        setLoadingProgress(25);
+        setLoadingStep('Merender halaman laporan...');
+      }
 
-      // Save original styles of the element to restore later
       const originalPosition = original.style.position;
       const originalLeft = original.style.left;
       const originalTop = original.style.top;
@@ -441,7 +823,6 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
         wrapperOriginalVisibility = wrapperEl.style.visibility;
         wrapperOriginalDisplay = wrapperEl.style.display;
 
-        // Temporarily override to make sure it's fully visible and positioned properly for capture
         wrapperEl.style.setProperty('position', 'relative', 'important');
         wrapperEl.style.setProperty('left', '0', 'important');
         wrapperEl.style.setProperty('top', '0', 'important');
@@ -455,7 +836,6 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
         wrapperEl.style.setProperty('display', 'block', 'important');
       }
 
-      // Temporarily style the printable paper itself
       original.style.setProperty('position', 'relative', 'important');
       original.style.setProperty('left', '0', 'important');
       original.style.setProperty('top', '0', 'important');
@@ -463,23 +843,22 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
       original.style.setProperty('box-shadow', 'none', 'important');
       original.style.setProperty('margin', '0 auto', 'important');
 
-      // Find notes and no-print elements inside original to hide them temporarily
       const notesEl = original.querySelector('#printable-notes') as HTMLElement;
       const noPrintEls = original.querySelectorAll('.no-print');
       const titleEl = original.querySelector('#printable-title') as HTMLElement;
-      
+
       let originalTitleText = '';
       if (titleEl) {
         originalTitleText = titleEl.textContent || '';
         titleEl.textContent = 'LAPORAN FILM LIPPO MALL PURI CINEMA XXI';
       }
-      
+
       let notesOriginalDisplay = '';
       if (notesEl) {
         notesOriginalDisplay = notesEl.style.display;
         notesEl.style.display = 'none';
       }
-      
+
       const noPrintOriginalDisplays: string[] = [];
       noPrintEls.forEach((el, index) => {
         const htmlEl = el as HTMLElement;
@@ -487,14 +866,12 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
         htmlEl.style.display = 'none';
       });
 
-      // Backup and temporarily replace oklch colors with HSL to prevent html2canvas parsing errors
       try {
         styleElements.forEach(el => {
           try {
             const text = el.textContent || '';
             if (text && text.includes('oklch')) {
               originalStylesText.push({ el, text });
-              
               const convertedText = text.replace(
                 /oklch\(\s*([0-9.]+%?)\s+([0-9.]+%?)\s+([0-9.]+(?:deg|rad|grad|turn)?)(?:\s*\/\s*([0-9.]+%?))?\s*\)/gi,
                 (match, l, c, h, a) => {
@@ -504,22 +881,18 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
                   } else if (lightVal <= 1.0) {
                     lightVal = lightVal * 100;
                   }
-                  
                   let chromaVal = parseFloat(c);
                   if (c.includes('%')) {
                     chromaVal = parseFloat(c) / 100;
                   }
-                  
                   let hueVal = parseFloat(h);
                   if (h.includes('rad')) {
                     hueVal = parseFloat(h) * (180 / Math.PI);
                   } else if (h.includes('turn')) {
                     hueVal = parseFloat(h) * 360;
                   }
-                  
                   const sat = Math.min(100, Math.round(chromaVal * 250));
                   const light = Math.round(lightVal);
-                  
                   if (a) {
                     return `hsla(${hueVal}, ${sat}%, ${light}%, ${a})`;
                   } else {
@@ -527,7 +900,6 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
                   }
                 }
               );
-              
               el.textContent = convertedText;
             }
           } catch (styleErr) {
@@ -538,60 +910,45 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
         console.warn('Gagal memproses style elements', styleElementsErr);
       }
 
-      // Briefly wait for style updates to take effect in the browser layout tree
       await new Promise(r => setTimeout(r, 200));
 
-      setLoadingProgress(50);
-      // Scroll window to top left so capture doesn't capture blank or offset frames
+      if (!silent) setLoadingProgress(50);
       window.scrollTo(0, 0);
 
       let imgData = '';
       try {
-        setLoadingProgress(60);
-        setLoadingStep('Merender halaman laporan...');
-        
-        // Try HTML-to-Image first (incredibly fast, perfect modern CSS support)
+        if (!silent) {
+          setLoadingProgress(60);
+          setLoadingStep('Merender halaman laporan...');
+        }
         imgData = await toJpeg(original, {
           quality: 0.95,
           backgroundColor: '#ffffff',
           pixelRatio: 2
         });
-        
-        setLoadingProgress(80);
+        if (!silent) setLoadingProgress(80);
       } catch (htmlToImageError) {
         console.warn('Metode toJpeg gagal, beralih ke fallback html2canvas:', htmlToImageError);
-        setLoadingStep('Merender halaman dengan metode fallback html2canvas...');
-        
-        // Render the original element directly using html2canvas fallback
+        if (!silent) setLoadingStep('Merender halaman dengan metode fallback html2canvas...');
         const canvas = await html2canvas(original, {
-          scale: 2.0, // Clean and crisp high resolution rendering without exploding memory
+          scale: 2.0,
           useCORS: true,
-          allowTaint: false, // CRITICAL: Must be false to prevent SecurityError on canvas.toDataURL
+          allowTaint: false,
           logging: true,
           backgroundColor: '#ffffff'
         });
-
         imgData = canvas.toDataURL('image/jpeg', 0.95);
-        setLoadingProgress(80);
+        if (!silent) setLoadingProgress(80);
       } finally {
-        // Instantly restore window scroll position
         window.scrollTo(scrollX, scrollY);
-
-        // Instantly restore original title text
         if (titleEl && originalTitleText) {
           titleEl.textContent = originalTitleText;
         }
-
-        // Instantly restore original oklch stylesheet styles
         originalStylesText.forEach(item => {
           try {
             item.el.textContent = item.text;
-          } catch (restoreErr) {
-            console.warn('Gagal mengembalikan style content', restoreErr);
-          }
+          } catch (_) {}
         });
-
-        // Instantly restore elements and styles
         if (notesEl) {
           notesEl.style.display = notesOriginalDisplay;
         }
@@ -599,7 +956,6 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
           const htmlEl = el as HTMLElement;
           htmlEl.style.display = noPrintOriginalDisplays[index];
         });
-
         if (wrapperEl) {
           wrapperEl.style.setProperty('position', wrapperOriginalPosition);
           wrapperEl.style.setProperty('left', wrapperOriginalLeft);
@@ -620,36 +976,32 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
         original.style.setProperty('width', originalWidth);
         original.style.setProperty('box-shadow', originalBoxShadow);
         original.style.setProperty('margin', originalMargin);
-
-        // Restore original preview state
         setShowPreview(originalPreviewState);
       }
 
-      setLoadingProgress(85);
-      setLoadingStep('Menyusun lembar PDF...');
+      if (!silent) {
+        setLoadingProgress(85);
+        setLoadingStep('Menyusun lembar PDF...');
+      }
 
-      // Get accurate image dimensions based on original element dimensions
       const elementWidth = original.offsetWidth || 850;
       const elementHeight = original.offsetHeight || 900;
 
-      // Page setup (Portrait A4 is 210mm x 297mm)
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      
+
       const margin = 10;
       const imgWidth = pdfWidth - (margin * 2);
       const imgHeight = (elementHeight * imgWidth) / elementWidth;
-      
+
       let heightLeft = imgHeight;
       let position = margin;
       const pageHeightLimit = pdfHeight - (margin * 2);
 
-      // Render first page
       pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
       heightLeft -= pageHeightLimit;
 
-      // Handle multi-page overflow if there is a lot of data
       while (heightLeft > 0) {
         position -= pageHeightLimit;
         pdf.addPage();
@@ -657,59 +1009,508 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
         heightLeft -= pageHeightLimit;
       }
 
-      setLoadingProgress(100);
-      setLoadingStep('Mengunduh berkas PDF...');
-
-      const filename = `Laporan_Mingguan_Film_XXI_${branding.subtitle.replace(/\s+/g, '_')}_${activeReport.periode.replace(/\s+/g, '_')}.pdf`;
-      
-      // Prepare blob URL for manual download backup
+      const reportPeriod = activeReport?.periode || selectedWeek || currentWeekStr;
+      const filename = `Laporan_Mingguan_Film_XXI_${(branding.subtitle || 'LMP').replace(/\s+/g, '_')}_${reportPeriod.replace(/\s+/g, '_')}.pdf`;
       const pdfBlob = pdf.output('blob');
+      const file = new File([pdfBlob], filename, {
+        type: 'application/pdf',
+        lastModified: Date.now()
+      });
       const blobUrl = URL.createObjectURL(pdfBlob);
+
+      const result = { file, blob: pdfBlob, filename, blobUrl };
+      masterPdfRef.current = result;
       setPdfDownloadUrl(blobUrl);
       setPdfFilename(filename);
-      setExportPdfSuccess(true);
 
-      // Highly reliable single automatic download trigger (prevents duplicate files in some browsers/iframes)
-      try {
-        const downloadLink = document.createElement('a');
-        downloadLink.href = blobUrl;
-        downloadLink.download = filename;
-        downloadLink.style.setProperty('display', 'none', 'important');
-        document.body.appendChild(downloadLink);
-        
-        downloadLink.click();
-        
-        setTimeout(() => {
-          downloadLink.remove();
-        }, 500);
-      } catch (err) {
-        console.warn('Direct anchor download failed, falling back to pdf.save', err);
-        try {
-          pdf.save(filename);
-        } catch (saveError) {
-          console.error('All download methods failed', saveError);
-        }
+      if (!silent) {
+        setLoadingProgress(100);
+        setLoadingStep('Selesai.');
+        setExportPdfSuccess(true);
+        setTimeout(() => setIsExportingPdf(false), 400);
       }
 
+      return result;
     } catch (error) {
-      console.error('Gagal mengekspor PDF:', error);
-      setIsExportingPdf(false);
-      setShowPreview(originalPreviewState);
-      window.scrollTo(scrollX, scrollY);
-      alert('Gagal mengekspor PDF secara langsung. Silakan coba kembali.');
+      console.error('Gagal membuat PDF master:', error);
+      if (!silent) {
+        setIsExportingPdf(false);
+        setShowPreview(originalPreviewState);
+        window.scrollTo(scrollX, scrollY);
+        alert('Gagal mengekspor PDF secara langsung. Silakan coba kembali.');
+      }
+      return null;
     }
   };
 
-  // Film data calculations for currently active report
+  // Download PDF Handler (Uses Master PDF)
+  const handleExportPdf = async () => {
+    let master = masterPdfRef.current;
+    if (!master) {
+      master = await generateMasterPdf(false);
+    }
+    if (!master) return;
+
+    try {
+      const downloadLink = document.createElement('a');
+      downloadLink.href = master.blobUrl;
+      downloadLink.download = master.filename;
+      downloadLink.style.setProperty('display', 'none', 'important');
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      setTimeout(() => downloadLink.remove(), 500);
+    } catch (err) {
+      console.warn('Direct anchor download failed, falling back to window.open', err);
+      window.open(master.blobUrl, '_blank');
+    }
+  };
+
+  // Share WhatsApp Handler with Real PDF Attachment via navigator.share
+  const handleShareWhatsApp = async () => {
+    const activePeriod = activeReport?.periode || selectedWeek || currentWeekStr;
+    const formattedPeriod = formatPeriodWithSd(activePeriod);
+    const whatsappMessage = `Ibu, mohon info. Berikut saya kirimkan laporan film mingguan periode ${formattedPeriod}. Mohon informasinya untuk film yang perlu dihapus atau dilanjutkan. Terima kasih, Bu.`;
+
+    // 1. Copy message text to clipboard synchronously
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = whatsappMessage;
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (_) {}
+
+    // 2. Ensure master PDF is ready
+    let master = masterPdfRef.current;
+    if (!master) {
+      master = await generateMasterPdf(false);
+    }
+
+    if (!master) {
+      alert('Gagal mempersiapkan file PDF laporan film.');
+      return;
+    }
+
+    const pdfFile = master.file;
+
+    // 3. Check if browser/device supports Web Share API with files
+    let canShareFiles = false;
+    try {
+      canShareFiles =
+        typeof navigator !== 'undefined' &&
+        typeof navigator.canShare === 'function' &&
+        Boolean(navigator.canShare({ files: [pdfFile] }));
+    } catch (_) {
+      canShareFiles = false;
+    }
+
+    if (canShareFiles) {
+      try {
+        await navigator.share({
+          text: whatsappMessage,
+          files: [pdfFile]
+        });
+        return;
+      } catch (err: any) {
+        if (err && err.name !== 'AbortError') {
+          console.warn('navigator.share failed:', err);
+        } else {
+          return;
+        }
+      }
+    }
+
+    // 4. Fallback for desktop web / unsupported Web Share file attachments
+    try {
+      const downloadLink = document.createElement('a');
+      downloadLink.href = master.blobUrl;
+      downloadLink.download = master.filename;
+      downloadLink.style.setProperty('display', 'none', 'important');
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      setTimeout(() => downloadLink.remove(), 500);
+    } catch (_) {}
+
+    alert(
+      `Perhatian: Browser / perangkat ini tidak mendukung pengiriman lampiran file langsung via Web Share API.\n\n` +
+      `File PDF master (${pdfFile.name}) telah diunduh otomatis dan pesan telah disalin ke clipboard.\n\n` +
+      `Silakan lampirkan file PDF yang baru saja diunduh ke chat WhatsApp yang akan terbuka.`
+    );
+
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(whatsappMessage)}`;
+    window.open(waUrl, '_blank');
+  };
+
+  // Send Gmail Handler with Real PDF Attachment via navigator.share / Compose fallback
+  const handleSendGmail = async () => {
+    const activePeriod = activeReport?.periode || selectedWeek || currentWeekStr;
+    const formattedPeriod = formatPeriodWithSd(activePeriod);
+    const subject = `Laporan Film Mingguan — ${formattedPeriod}`;
+    const body = `Kepada Yth. Manager Bioskop Cinema XXI Lippo Mall Puri,
+
+Berikut saya kirimkan Laporan Film Mingguan periode ${formattedPeriod}.
+Mohon informasinya untuk film yang perlu dihapus atau dilanjutkan.
+
+[RAPOT FILM]
+
+Terima kasih, Bu.
+Hormat kami,
+Operator Proyeksi / Engineering XXI LMP`;
+
+    // 1. Copy body to clipboard
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = body;
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (_) {}
+
+    // 2. Ensure master PDF is ready
+    let master = masterPdfRef.current;
+    if (!master) {
+      master = await generateMasterPdf(false);
+    }
+
+    if (!master) {
+      alert('Gagal mempersiapkan file PDF laporan film.');
+      return;
+    }
+
+    const pdfFile = master.file;
+
+    // 3. Check if device supports navigator.share with files
+    let canShareFiles = false;
+    try {
+      canShareFiles =
+        typeof navigator !== 'undefined' &&
+        typeof navigator.canShare === 'function' &&
+        Boolean(navigator.canShare({ files: [pdfFile] }));
+    } catch (_) {
+      canShareFiles = false;
+    }
+
+    if (canShareFiles) {
+      try {
+        await navigator.share({
+          title: subject,
+          text: body,
+          files: [pdfFile]
+        });
+        return;
+      } catch (err: any) {
+        if (err && err.name !== 'AbortError') {
+          console.warn('navigator.share with Gmail failed:', err);
+        } else {
+          return;
+        }
+      }
+    }
+
+    // 4. Fallback for browsers without Web Share files API
+    try {
+      const downloadLink = document.createElement('a');
+      downloadLink.href = master.blobUrl;
+      downloadLink.download = master.filename;
+      downloadLink.style.setProperty('display', 'none', 'important');
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      setTimeout(() => downloadLink.remove(), 500);
+    } catch (_) {}
+
+    alert(
+      `Perhatian: Browser ini tidak mendukung penyematan lampiran file otomatis melalui Web Share API.\n\n` +
+      `File PDF master (${pdfFile.name}) telah diunduh otomatis.\n\n` +
+      `Jendela Gmail Compose akan terbuka. Silakan klik ikon klip kertas (Lampirkan file) di Gmail untuk melampirkan berkas PDF tersebut.`
+    );
+
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank');
+  };
+
+  // Film data calculations for currently active report (Strictly Manual Status & KDM)
+  // ONLY populated when films have been imported via "IMPORT KE LAPORAN FILM".
+  // Before import, Laporan Film MUST be completely empty (NO IMPORT -> NO FILM DATA -> NO FILM ROW).
   let reportFilms: GeneratedFilm[] = [];
+
   if (activeReport) {
     try {
-      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
-      reportFilms = parsed.films || [];
+      const parsed = JSON.parse(activeReport.report_json) as ReportPayload & { is_imported?: boolean };
+      const rawFilms = parsed.films || [];
+      // Strictly ignore any legacy master film auto-dump (e.g. 34 films flm-01..flm-34 or 4 initial mock films without is_imported)
+      const isLegacyMasterDump =
+        (rawFilms.length === 34 && rawFilms.every((f) => f.id?.startsWith('flm-'))) ||
+        (rawFilms.length <= 4 && rawFilms.every((f) => f.id?.startsWith('film-')) && !parsed.is_imported);
+
+      if (!isLegacyMasterDump && rawFilms.length > 0) {
+        reportFilms = rawFilms.map((film) => {
+          let currentStatus = (film.status_tayang || 'BELUM TAYANG').toUpperCase();
+          if (!['BELUM TAYANG', 'SEDANG TAYANG', 'SUDAH TAYANG'].includes(currentStatus)) {
+            currentStatus = 'BELUM TAYANG';
+          }
+          return {
+            ...film,
+            status_tayang: currentStatus
+          };
+        });
+      }
     } catch {
       reportFilms = [];
     }
   }
+
+  // Handle manual status update on active report (NEVER touches Master Film)
+  const handleStatusChange = (filmId: string, newStatus: string) => {
+    if (!activeReport) return;
+    try {
+      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
+      parsed.films = (parsed.films || []).map((f) =>
+        f.id === filmId ? { ...f, status_tayang: newStatus } : f
+      );
+      const updated: WeeklyReport = {
+        ...activeReport,
+        report_json: JSON.stringify(parsed)
+      };
+      db.saveWeeklyReport(updated);
+      setWeeklyReports(db.getWeeklyReports());
+      setActiveReport(updated);
+    } catch (e) {
+      console.error('Error saving film status:', e);
+    }
+  };
+
+  // Handle manual KDM update on active report (NEVER touches Master Film)
+  const handleKdmChange = (filmId: string, newKdm: string) => {
+    if (!activeReport) return;
+    try {
+      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
+      parsed.films = (parsed.films || []).map((f) =>
+        f.id === filmId ? { ...f, kdm: newKdm } : f
+      );
+      const updated: WeeklyReport = {
+        ...activeReport,
+        report_json: JSON.stringify(parsed)
+      };
+      db.saveWeeklyReport(updated);
+      setWeeklyReports(db.getWeeklyReports());
+      setActiveReport(updated);
+      masterPdfRef.current = null;
+      try {
+        localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(parsed.films));
+      } catch (_) {}
+    } catch (e) {
+      console.error('Error saving KDM:', e);
+    }
+  };
+
+  // State and Handlers for Manual Edit & Delete Film in Report (Requirement G & H)
+  const [editingReportFilm, setEditingReportFilm] = useState<GeneratedFilm | null>(null);
+
+  // Handle single film deletion from active report (Requirement G)
+  const handleDeleteReportFilm = async (filmId: string, judulFilm: string) => {
+    if (!activeReport) return;
+    const confirmDelete = window.confirm(
+      `Hapus film "${(judulFilm || '').toUpperCase()}" dari Laporan Film periode ${activeReport.periode}?\n\n` +
+      `Catatan: Master Film Tahunan tetap utuh dan terlindungi.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
+      const remainingFilms = (parsed.films || []).filter((f) => f.id !== filmId);
+      const updatedPayload: ReportPayload = {
+        ...parsed,
+        films: remainingFilms
+      };
+      const updated: WeeklyReport = {
+        ...activeReport,
+        jumlah_film: remainingFilms.length,
+        jumlah_kdm: remainingFilms.filter((f) => f.kdm === 'Aktif' || !['Expired', 'Tidak Ada', 'Tidak Aktif', 'TIDAK AKTIF'].includes(f.kdm)).length,
+        jumlah_upload: remainingFilms.length,
+        report_json: JSON.stringify(updatedPayload)
+      };
+      await db.saveWeeklyReport(updated);
+      setWeeklyReports(db.getWeeklyReports());
+      setActiveReport(updated);
+      setSelectedReportFilmIds((prev) => {
+        const next = { ...prev };
+        delete next[filmId];
+        return next;
+      });
+      masterPdfRef.current = null;
+      try {
+        localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(remainingFilms));
+        if (remainingFilms.length === 0) {
+          localStorage.removeItem('xxi_has_imported_to_laporan');
+          localStorage.removeItem('xxi_selected_laporan_films');
+        }
+      } catch (_) {}
+    } catch (e) {
+      console.error('Error deleting report film:', e);
+      alert('Gagal menghapus film dari Laporan Film.');
+    }
+  };
+
+  // Checkbox toggle & Bulk Delete Handlers (Requirement H)
+  const handleToggleReportFilmCheck = (filmId: string) => {
+    setSelectedReportFilmIds((prev) => ({
+      ...prev,
+      [filmId]: !prev[filmId]
+    }));
+  };
+
+  const handleSelectAllReportFilms = () => {
+    const next: Record<string, boolean> = {};
+    sortedReportFilms.forEach((f) => {
+      next[f.id] = true;
+    });
+    setSelectedReportFilmIds(next);
+  };
+
+  const handleDeselectAllReportFilms = () => {
+    setSelectedReportFilmIds({});
+  };
+
+  const handleBulkDeleteReportFilms = async () => {
+    if (!activeReport) return;
+    const selectedIds = Object.keys(selectedReportFilmIds).filter((id) => selectedReportFilmIds[id]);
+    if (selectedIds.length === 0) return;
+
+    const confirmDelete = window.confirm(
+      `Hapus ${selectedIds.length} film terpilih dari Laporan Film periode ${activeReport.periode}?\n\n` +
+      `Catatan: Master Film Tahunan tetap utuh dan terlindungi.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
+      const remainingFilms = (parsed.films || []).filter((f) => !selectedReportFilmIds[f.id]);
+      const updatedPayload: ReportPayload = {
+        ...parsed,
+        films: remainingFilms
+      };
+      const updated: WeeklyReport = {
+        ...activeReport,
+        jumlah_film: remainingFilms.length,
+        jumlah_kdm: remainingFilms.filter((f) => f.kdm === 'Aktif' || !['Expired', 'Tidak Ada', 'Tidak Aktif', 'TIDAK AKTIF'].includes(f.kdm)).length,
+        jumlah_upload: remainingFilms.length,
+        report_json: JSON.stringify(updatedPayload)
+      };
+      await db.saveWeeklyReport(updated);
+      setWeeklyReports(db.getWeeklyReports());
+      setActiveReport(updated);
+      setSelectedReportFilmIds({});
+      masterPdfRef.current = null;
+      try {
+        localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(remainingFilms));
+        if (remainingFilms.length === 0) {
+          localStorage.removeItem('xxi_has_imported_to_laporan');
+          localStorage.removeItem('xxi_selected_laporan_films');
+        }
+      } catch (_) {}
+    } catch (e) {
+      console.error('Error bulk deleting report films:', e);
+      alert('Gagal menghapus film-film terpilih dari Laporan Film.');
+    }
+  };
+
+  // Handle saving edited film in active report (NEVER touches Master Film)
+  const handleSaveReportFilmEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeReport || !editingReportFilm) return;
+
+    try {
+      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
+      const updatedFilms = (parsed.films || []).map((f) =>
+        f.id === editingReportFilm.id ? editingReportFilm : f
+      );
+      const updatedPayload: ReportPayload = {
+        ...parsed,
+        films: updatedFilms
+      };
+      const updated: WeeklyReport = {
+        ...activeReport,
+        jumlah_film: updatedFilms.length,
+        jumlah_kdm: updatedFilms.filter((f) => f.kdm === 'Aktif' || !['Expired', 'Tidak Ada', 'Tidak Aktif', 'TIDAK AKTIF'].includes(f.kdm)).length,
+        jumlah_upload: updatedFilms.length,
+        report_json: JSON.stringify(updatedPayload)
+      };
+      await db.saveWeeklyReport(updated);
+      setWeeklyReports(db.getWeeklyReports());
+      setActiveReport(updated);
+      masterPdfRef.current = null;
+      try {
+        localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(updatedFilms));
+      } catch (_) {}
+      setEditingReportFilm(null);
+    } catch (err) {
+      console.error('Error saving edited film:', err);
+      alert('Gagal menyimpan perubahan data film.');
+    }
+  };
+
+  // Google Drive upload state
+  const [isUploadingDrive, setIsUploadingDrive] = useState(false);
+  const handleUploadToDrive = async () => {
+    setIsUploadingDrive(true);
+    try {
+      let master = masterPdfRef.current;
+      if (!master) {
+        master = await generateMasterPdf(false);
+      }
+      if (!master) {
+        alert('Gagal membuat berkas PDF untuk diunggah.');
+        return;
+      }
+      const now = new Date();
+      const monthNames = [
+        'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+      ];
+      const monthYear = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+      const folderPath = `Laporan Film/${monthYear}`;
+      const activePeriod = activeReport?.periode || selectedWeek || currentWeekStr;
+      const cleanPeriod = activePeriod.replace(/\s*(?:[-–—]|s\/d|sd|sampai)\s*/i, ' s-d ').replace(/[^a-zA-Z0-9\s-]/g, '');
+      const uploadName = `Laporan Film ${cleanPeriod}`;
+
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const res = await fetch('/api/drive/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: uploadName,
+            category: folderPath,
+            fileData: base64,
+            mimeType: 'application/pdf',
+            size: `${Math.round(master!.blob.size / 1024)} KB`
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert(`Berhasil diunggah ke Google Drive!\nFolder: ${folderPath}\nFile: ${uploadName}.pdf`);
+        } else {
+          alert('Gagal unggah ke Google Drive: ' + (data.message || 'Error'));
+        }
+      };
+      reader.readAsDataURL(master.blob);
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setIsUploadingDrive(false);
+    }
+  };
 
   // Filtered report films based on UI search/filters
   const filteredReportFilms = reportFilms.filter(film => {
@@ -734,7 +1535,17 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
     }
     // 3. Status Tayang Filter
     if (reportFilterStatusTayang !== 'ALL') {
-      if ((film.status_tayang || '').toUpperCase() !== reportFilterStatusTayang.toUpperCase()) return false;
+      const filmStatus = (film.status_tayang || '').toUpperCase();
+      const targetFilter = reportFilterStatusTayang.toUpperCase();
+      if (targetFilter === 'SEDANG TAYANG') {
+        if (filmStatus !== 'SEDANG TAYANG') return false;
+      } else if (targetFilter === 'BELUM TAYANG') {
+        if (filmStatus !== 'BELUM TAYANG') return false;
+      } else if (targetFilter === 'SUDAH TAYANG') {
+        if (filmStatus !== 'SUDAH TAYANG') return false;
+      } else if (filmStatus !== targetFilter) {
+        return false;
+      }
     }
     // 4. Status KDM Filter
     if (reportFilterStatusKdm !== 'ALL') {
@@ -758,10 +1569,43 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
   const totalKdmExpired = filteredReportFilms.filter(f => f.kdm === 'Expired').length;
   const totalDcpCount = filteredReportFilms.filter(f => f.status_dcp === 'Lengkap').length;
 
+  // Strict Grouping Order: 1. BELUM TAYANG, 2. SEDANG TAYANG, 3. SUDAH TAYANG
+  const statusGroupingOrder: Record<string, number> = {
+    'BELUM TAYANG': 1,
+    'SEDANG TAYANG': 2,
+    'SUDAH TAYANG': 3
+  };
+
+  const sortedReportFilms = [...filteredReportFilms].sort((a, b) => {
+    const orderA = statusGroupingOrder[(a.status_tayang || '').toUpperCase()] || 4;
+    const orderB = statusGroupingOrder[(b.status_tayang || '').toUpperCase()] || 4;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.judul_film.localeCompare(b.judul_film);
+  });
+
   const isDataChanged = isDataChangedSinceGeneration();
 
   return (
     <div className="space-y-6 animate-slide-in" id="laporan-film-view">
+      {/* Import Success Banner */}
+      {importNotice && (
+        <div className="bg-emerald-950/90 border border-emerald-500/60 p-4 rounded-2xl flex items-center justify-between gap-3 text-emerald-200 text-sm font-bold shadow-[0_0_20px_rgba(16,185,129,0.25)] animate-fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{importNotice}</span>
+          </div>
+          {onClearImportNotice && (
+            <button
+              type="button"
+              onClick={onClearImportNotice}
+              className="text-xs font-mono text-emerald-400 hover:text-white px-2.5 py-1 rounded-lg bg-emerald-900/60 hover:bg-emerald-800 transition cursor-pointer"
+            >
+              Tutup
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Upper header section */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-[#0d1322]/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/25 shadow-[0_0_20px_rgba(0,240,255,0.05)]">
         <div>
@@ -774,42 +1618,92 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto shrink-0">
-          {/* Week Selector Dropdown */}
-          <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-mono whitespace-nowrap hidden sm:inline">PERIODE MINGGU:</span>
-            <select
-              value={selectedWeek}
-              onChange={(e) => setSelectedWeek(e.target.value)}
-              className="flex-1 sm:flex-initial bg-slate-50 border border-slate-200 text-slate-900 rounded-xl px-3.5 py-2.5 text-xs font-bold focus:outline-none focus:border-blue-500 transition-colors cursor-pointer"
-              id="select-period-week"
-            >
-              {weekRanges.length === 0 ? (
-                <option value="">-- Tidak ada data film --</option>
-              ) : (
-                weekRanges.map((w, idx) => (
-                  <option key={idx} value={w}>Minggu: {w}</option>
-                ))
-              )}
-            </select>
+        <div className="flex flex-col gap-3 w-full xl:w-auto shrink-0">
+          {/* Flexible Date Picker & Presets */}
+          <div className="flex flex-wrap items-center gap-2 bg-[#09101e] border border-cyan-500/25 p-2 rounded-xl">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 font-mono uppercase">Mulai:</span>
+              <input
+                type="date"
+                value={startDateInput}
+                onChange={(e) => handleDateRangeChange(e.target.value, endDateInput)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs font-mono focus:border-cyan-400 focus:outline-none cursor-pointer"
+                title="Tanggal Mulai Laporan"
+              />
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-slate-400 font-mono uppercase">Sampai:</span>
+              <input
+                type="date"
+                value={endDateInput}
+                onChange={(e) => handleDateRangeChange(startDateInput, e.target.value)}
+                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs font-mono focus:border-cyan-400 focus:outline-none cursor-pointer"
+                title="Tanggal Akhir Laporan"
+              />
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={setPresetToday}
+                className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-300 text-[10px] font-mono font-bold transition cursor-pointer"
+                title="Laporan 1 Hari (Hari Ini)"
+              >
+                1 Hari
+              </button>
+              <button
+                type="button"
+                onClick={setPresetThisWeek}
+                className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-300 text-[10px] font-mono font-bold transition cursor-pointer"
+                title="Laporan 1 Minggu (Senin - Minggu)"
+              >
+                Mingguan
+              </button>
+              <button
+                type="button"
+                onClick={setPresetThisMonth}
+                className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-300 text-[10px] font-mono font-bold transition cursor-pointer"
+                title="Laporan 1 Bulan Penuh"
+              >
+                Bulanan
+              </button>
+            </div>
           </div>
 
-          <button
-            onClick={handleGenerateReport}
-            disabled={!selectedWeek || (selectedWeek === 'Semua Periode' ? filmUploads.length === 0 : filmUploads.filter(f => getWeekRangeString(f.tanggal_terima) === selectedWeek).length === 0)}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 text-xs font-bold text-black hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-            id="btn-generate-report"
-          >
-            <RefreshCw className="h-4 w-4" /> {activeReport ? 'Generate Ulang' : 'Generate Laporan'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Week Selector Dropdown for Saved Reports */}
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono whitespace-nowrap hidden sm:inline">ARSIP PERIODE:</span>
+              <select
+                value={selectedWeek}
+                onChange={(e) => setSelectedWeek(e.target.value)}
+                className="flex-1 sm:flex-initial bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold font-mono focus:outline-none focus:border-cyan-400 transition-colors cursor-pointer"
+                id="select-period-week"
+              >
+                {weekRanges.length === 0 ? (
+                  <option value="">-- Tidak ada arsip --</option>
+                ) : (
+                  weekRanges.map((w, idx) => (
+                    <option key={idx} value={w}>Periode: {w}</option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <button
+              onClick={handleGenerateReport}
+              disabled={!selectedWeek || reportFilms.length === 0}
+              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 text-xs font-bold text-black hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+              id="btn-generate-report"
+            >
+              <RefreshCw className="h-4 w-4" /> {activeReport && reportFilms.length > 0 ? 'Generate Ulang' : 'Generate Laporan'}
+            </button>
           
           <button
             onClick={() => setShowPreview(!showPreview)}
-            disabled={!activeReport}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-all ${
-              showPreview && activeReport
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
+              showPreview
                 ? 'bg-cyan-600 border-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-                : 'bg-zinc-800/80 border-zinc-700 text-zinc-300 disabled:opacity-40 disabled:pointer-events-none'
+                : 'bg-zinc-800/80 border-zinc-700 text-zinc-300'
             }`}
             id="btn-preview-report"
           >
@@ -817,37 +1711,67 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
           </button>
 
           <button
-            onClick={() => setShowConfig(!showConfig)}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-all ${
+            onClick={handleOpenConfig}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition-all cursor-pointer ${
               showConfig
-                ? 'bg-zinc-700 border-zinc-600 text-white'
-                : 'bg-zinc-800/80 border-zinc-700 text-zinc-300'
+                ? 'bg-amber-400 text-slate-950 shadow-[0_0_25px_rgba(251,191,36,0.6)] border-2 border-amber-300'
+                : 'bg-gradient-to-r from-amber-500/20 via-yellow-500/30 to-amber-500/20 text-yellow-300 hover:text-white hover:bg-yellow-500/40 border-2 border-yellow-400/80 shadow-[0_0_20px_rgba(234,179,8,0.35)] hover:shadow-[0_0_28px_rgba(234,179,8,0.6)] ring-1 ring-yellow-400/40'
             }`}
             id="btn-config-report"
           >
-            <Settings className="h-4 w-4" /> Konfigurasi Cetak
+            <Sparkles className="h-4 w-4 text-yellow-400 animate-pulse" />
+            <span>KONFIGURASI CETAK ✨</span>
           </button>
 
           <button
             onClick={handleExportPdf}
-            disabled={!activeReport}
             className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-emerald-600 border border-emerald-500 hover:bg-emerald-500 text-white px-4 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
             id="btn-pdf-report"
           >
             <Download className="h-4 w-4 text-white animate-bounce-slow" /> Download PDF
           </button>
 
-          {activeReport && (
+          <button
+            onClick={handleShareWhatsApp}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-emerald-700/80 border border-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+            id="btn-share-whatsapp"
+            title="Share WhatsApp ke Manager"
+          >
+            <Share2 className="h-4 w-4 text-emerald-300" /> Share WhatsApp
+          </button>
+
+          <button
+            onClick={handleUploadToDrive}
+            disabled={isUploadingDrive}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-cyan-700/80 border border-cyan-500 hover:bg-cyan-600 text-white px-3.5 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.2)]"
+            id="btn-upload-drive"
+            title="Unggah ke Google Drive (Laporan Film/Bulan Tahun)"
+          >
+            <UploadCloud className="h-4 w-4 text-cyan-300" />
+            <span>{isUploadingDrive ? 'Mengunggah...' : 'Unggah ke Drive'}</span>
+          </button>
+
+          <button
+            onClick={handleSendGmail}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-red-900/70 border border-red-500/50 hover:bg-red-800 text-white px-3.5 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.2)]"
+            id="btn-send-gmail"
+            title="Kirim Laporan via Gmail"
+          >
+            <Mail className="h-4 w-4 text-red-300" /> Kirim Gmail
+          </button>
+
+          {activeReport && reportFilms.length > 0 && (
             <button
               onClick={() => handleDeleteReport(activeReport.id)}
-              className="sm:flex-initial p-2.5 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 transition-colors"
-              title="Hapus Laporan / Draft Ulang"
+              className="sm:flex-initial p-2.5 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 transition-colors cursor-pointer"
+              title="Hapus Data Laporan Film Periode Ini (Kembali Kosong)"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
       </div>
+    </div>
 
       {/* Real-time Data Changed Warning Badge */}
       {activeReport && isDataChanged && (
@@ -867,10 +1791,16 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
 
       {/* Report Customizer panel */}
       {showConfig && (
-        <div className="bg-[#0c121a]/60 border border-yellow-500/15 p-5 rounded-2xl animate-slide-in space-y-4">
-          <h3 className="text-sm font-extrabold text-yellow-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <Settings className="w-4 h-4" /> Parameter Header & Tanda Tangan Cetak
-          </h3>
+        <div className="bg-[#0c121a]/90 border border-yellow-500/30 p-5 rounded-2xl animate-slide-in space-y-4 shadow-[0_0_30px_rgba(234,179,8,0.15)]">
+          <div className="flex items-center justify-between pb-2 border-b border-yellow-500/20">
+            <h3 className="text-sm font-extrabold text-yellow-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-yellow-400" /> Parameter Header & Tanda Tangan Cetak
+            </h3>
+            <span className="text-[11px] font-mono text-zinc-400">
+              Ubah data lalu klik <strong className="text-yellow-400">TERAPKAN</strong> untuk memperbarui pratinjau.
+            </span>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-1">
               <label className="text-sm font-black text-white uppercase tracking-wider font-mono">Periode Laporan</label>
@@ -885,8 +1815,8 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
               <label className="text-sm font-black text-white uppercase tracking-wider font-mono">Nomor Dokumen</label>
               <input
                 type="text"
-                value={nomorDokumen}
-                onChange={(e) => setNomorDokumen(e.target.value)}
+                value={draftNomorDokumen}
+                onChange={(e) => setDraftNomorDokumen(e.target.value)}
                 placeholder="Contoh: XXI/LMP/ENG/2026/001"
                 className="w-full bg-[#040608]/80 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-yellow-500 transition-colors"
               />
@@ -904,8 +1834,9 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
               <label className="text-sm font-black text-white uppercase tracking-wider font-mono">Pembuat Laporan</label>
               <input
                 type="text"
-                value={pembuatLaporan}
-                onChange={(e) => setPembuatLaporan(e.target.value)}
+                value={draftPembuatLaporan}
+                onChange={(e) => setDraftPembuatLaporan(e.target.value)}
+                placeholder="Nama Pembuat"
                 className="w-full bg-[#040608]/80 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-yellow-500 transition-colors"
               />
             </div>
@@ -913,17 +1844,19 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
               <label className="text-sm font-black text-white uppercase tracking-wider font-mono">Jabatan Pembuat</label>
               <input
                 type="text"
-                value={jabatanPembuat}
-                onChange={(e) => setJabatanPembuat(e.target.value)}
+                value={draftJabatanPembuat}
+                onChange={(e) => setDraftJabatanPembuat(e.target.value)}
+                placeholder="Contoh: Opr / Teknisi"
                 className="w-full bg-[#040608]/80 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-yellow-500 transition-colors"
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-black text-white uppercase tracking-wider font-mono">Mengetahui (Pimpinan)</label>
+              <label className="text-sm font-black text-white uppercase tracking-wider font-mono">Mengetahui (Manager)</label>
               <input
                 type="text"
-                value={mengetahui}
-                onChange={(e) => setMengetahui(e.target.value)}
+                value={draftMengetahui}
+                onChange={(e) => setDraftMengetahui(e.target.value)}
+                placeholder="Nama Manager"
                 className="w-full bg-[#040608]/80 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-yellow-500 transition-colors"
               />
             </div>
@@ -931,11 +1864,81 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
               <label className="text-sm font-black text-white uppercase tracking-wider font-mono">Jabatan Pimpinan</label>
               <input
                 type="text"
-                value={jabatanMengetahui}
-                onChange={(e) => setJabatanMengetahui(e.target.value)}
+                value={draftJabatanMengetahui}
+                onChange={(e) => setDraftJabatanMengetahui(e.target.value)}
+                placeholder="Contoh: Manager Bioskop"
                 className="w-full bg-[#040608]/80 border border-zinc-700 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none focus:border-yellow-500 transition-colors"
               />
             </div>
+          </div>
+
+          {/* Server Storage Configuration (Studio 1-8, Premiere 1-2, Library / AHM) */}
+          <div className="pt-4 border-t border-yellow-500/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Server className="w-4 h-4 text-yellow-400" />
+                <h4 className="text-xs font-black text-yellow-300 uppercase tracking-wider font-mono">
+                  Konfigurasi Server &amp; Storage Bioskop (11 Server)
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                {serverConfigSaveMsg && (
+                  <span className="text-[11px] font-mono text-emerald-400 font-bold bg-emerald-950/80 border border-emerald-500/40 px-2 py-0.5 rounded-md flex items-center gap-1 animate-pulse">
+                    <Check className="w-3 h-3" /> {serverConfigSaveMsg}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleResetServerConfig}
+                  className="text-[11px] font-mono text-slate-400 hover:text-white px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer"
+                  title="Kembalikan nama & kapasitas server ke standar default"
+                >
+                  Reset Default
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-3">
+              Konfigurasi nama server dan kapasitas TB di bawah ini langsung tersimpan dan otomatis dipergunakan pada tabel cetak Laporan Film.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {serverConfigs.map((srv) => (
+                <div key={srv.id} className="bg-[#080d1a] border border-cyan-500/20 p-2.5 rounded-xl flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={srv.name}
+                    onChange={(e) => handleUpdateServerConfig(srv.id, 'name', e.target.value)}
+                    placeholder="Nama Server"
+                    className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white font-mono focus:border-yellow-400 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    value={srv.capacityTb}
+                    onChange={(e) => handleUpdateServerConfig(srv.id, 'capacityTb', e.target.value)}
+                    placeholder="Kapasitas"
+                    className="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-yellow-300 font-mono text-right focus:border-yellow-400 focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons: [ BATAL ] [ TERAPKAN ] */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-yellow-500/20">
+            <button
+              type="button"
+              onClick={handleCancelConfig}
+              className="px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold font-mono transition cursor-pointer"
+            >
+              BATAL
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyConfig}
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-slate-950 text-xs font-black font-mono shadow-[0_0_20px_rgba(234,179,8,0.45)] transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>TERAPKAN</span>
+            </button>
           </div>
         </div>
       )}
@@ -973,32 +1976,7 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
           </div>
         )}
 
-        {!isLoading && !activeReport && (
-          <div className="bg-[#0c121a]/40 border border-zinc-800 p-16 rounded-2xl text-center space-y-4">
-            <FileText className="w-12 h-12 text-zinc-600 mx-auto stroke-1" />
-            <div className="max-w-md mx-auto space-y-2">
-              <h3 className="text-base font-bold text-white font-sans">
-                {!selectedWeek ? 'Tidak ada data film untuk periode ini.' : 'Laporan Belum Dibuat'}
-              </h3>
-              <p className="text-xs text-zinc-400 font-sans leading-relaxed">
-                {!selectedWeek 
-                  ? 'Belum ada data film yang diupload ke dalam pangkalan data. Silakan tambahkan film di menu "Upload Film" terlebih dahulu.'
-                  : `Dokumen rekapitulasi untuk periode minggu "${selectedWeek}" belum dibuat. Silakan klik tombol Auto-Generate untuk memproses seluruh data.`
-                }
-              </p>
-            </div>
-            {selectedWeek && (selectedWeek === 'Semua Periode' ? filmUploads.length > 0 : filmUploads.filter(f => getWeekRangeString(f.tanggal_terima) === selectedWeek).length > 0) && (
-              <button
-                onClick={handleGenerateReport}
-                className="inline-flex items-center gap-2 bg-yellow-500 px-5 py-2.5 rounded-xl text-xs font-bold text-black hover:bg-yellow-400 hover:shadow-[0_0_15px_rgba(234,179,8,0.3)] transition-all cursor-pointer"
-              >
-                <Play className="w-3.5 h-3.5 fill-black" /> Mulai Auto-Generate
-              </button>
-            )}
-          </div>
-        )}
-
-        {!isLoading && activeReport && (
+        {!isLoading && (
           <>
             {/* Filter Panel for Report Table View */}
             <div className="bg-[#0c121a]/60 border border-zinc-800 p-4 rounded-xl space-y-3">
@@ -1137,6 +2115,278 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
               </div>
             </div>
 
+            {/* Interactive Editable Table: EDIT -> PREVIEW -> CEK -> GENERATE PDF */}
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl p-5 space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                  <h3 className="text-base font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-cyan-400" />
+                    STATUS TAYANG &amp; STATUS KDM MANUAL (EDITABLE)
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-1 font-sans">
+                    Ubah Status Tayang dan KDM secara manual untuk laporan periode ini. Tersedia fitur checkbox, hapus satuan, dan hapus massal tanpa mengubah Master Film.
+                  </p>
+                </div>
+
+                {/* Bulk Actions & Selection Toolbar (Requirement G & H) */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllReportFilms}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold font-mono transition cursor-pointer"
+                    id="btn-select-all-laporan"
+                  >
+                    ☑ PILIH SEMUA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeselectAllReportFilms}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold font-mono transition cursor-pointer"
+                    id="btn-deselect-all-laporan"
+                  >
+                    ☐ LEPAS SEMUA
+                  </button>
+                  {Object.values(selectedReportFilmIds).filter(Boolean).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleBulkDeleteReportFilms}
+                      className="px-3.5 py-1.5 rounded-lg bg-rose-950 text-rose-300 border border-rose-500/50 hover:bg-rose-900 text-xs font-black font-mono transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-fade-in"
+                      id="btn-bulk-delete-laporan"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      HAPUS TERPILIH ({Object.values(selectedReportFilmIds).filter(Boolean).length})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(!showPreview)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 text-xs font-bold font-mono hover:bg-cyan-600/30 transition cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    {showPreview ? 'Sembunyikan Pratinjau Kertas' : 'Lihat Pratinjau Kertas PDF'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-950/90 border-b border-slate-800 text-xs font-black text-slate-300 uppercase tracking-wider font-mono">
+                      <th className="py-3 px-3 text-center w-12">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allChecked = sortedReportFilms.length > 0 && sortedReportFilms.every((f) => selectedReportFilmIds[f.id]);
+                            if (allChecked) {
+                              handleDeselectAllReportFilms();
+                            } else {
+                              handleSelectAllReportFilms();
+                            }
+                          }}
+                          className="text-slate-400 hover:text-cyan-400 transition"
+                          title="Pilih Semua / Lepas Semua"
+                        >
+                          {sortedReportFilms.length > 0 && sortedReportFilms.every((f) => selectedReportFilmIds[f.id]) ? (
+                            <CheckSquare className="w-4 h-4 text-cyan-400" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="py-3 px-3 text-center w-12">No</th>
+                      <th className="py-3 px-3 min-w-[220px]">Judul Film</th>
+                      <th className="py-3 px-3 w-56">Status Tayang (3 Opsi)</th>
+                      <th className="py-3 px-3 w-52">Status KDM</th>
+                      <th className="py-3 px-3 w-32">Format Layar</th>
+                      <th className="py-3 px-3 w-28">Sound</th>
+                      <th className="py-3 px-3 text-center w-20">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-xs sm:text-sm font-mono">
+                    {sortedReportFilms.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400 font-mono text-xs">
+                          <div className="flex flex-col items-center justify-center gap-2">
+                            <FileText className="w-8 h-8 text-slate-600 stroke-1" />
+                            <span className="font-bold text-slate-300 text-sm">Belum ada film di Laporan Film</span>
+                            <span className="text-xs text-slate-500 max-w-md">
+                              Laporan Film masih kosong. Silakan buka menu <strong className="text-cyan-400 font-bold">Seleksi Film Laporan</strong>, pilih film hasil scan, lalu klik <strong className="text-cyan-400 font-bold">"IMPORT KE LAPORAN FILM"</strong>.
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      sortedReportFilms.map((film, idx) => {
+                        const st = (film.status_tayang || 'BELUM TAYANG').toUpperCase();
+                        const isChecked = !!selectedReportFilmIds[film.id];
+                        return (
+                          <tr
+                            key={film.id}
+                            className={`transition ${
+                              isChecked
+                                ? 'bg-cyan-950/20 hover:bg-cyan-950/30'
+                                : 'hover:bg-slate-800/40'
+                            }`}
+                          >
+                            <td className="py-3 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => handleToggleReportFilmCheck(film.id)}
+                                className="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-cyan-400 cursor-pointer accent-cyan-500"
+                              />
+                            </td>
+                            <td className="py-3 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                            <td className="py-3 px-3 font-sans font-black text-white text-sm sm:text-base tracking-tight">
+                              {(film.judul_film || '').toUpperCase()}
+                            </td>
+                            <td className="py-3 px-3">
+                              <select
+                                value={st}
+                                onChange={(e) => handleStatusChange(film.id, e.target.value)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide border cursor-pointer w-full transition-colors ${
+                                  st === 'SEDANG TAYANG'
+                                    ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.25)]'
+                                    : st === 'SUDAH TAYANG'
+                                    ? 'bg-rose-950/90 text-rose-300 border-rose-500/60 shadow-[0_0_8px_rgba(244,63,94,0.25)]'
+                                    : 'bg-slate-950 text-slate-200 border-slate-700'
+                                }`}
+                              >
+                                <option value="BELUM TAYANG" className="bg-slate-950 text-slate-300 font-bold">
+                                  Belum Tayang
+                                </option>
+                                <option value="SEDANG TAYANG" className="bg-slate-950 text-emerald-400 font-bold">
+                                  Sedang Tayang
+                                </option>
+                                <option value="SUDAH TAYANG" className="bg-slate-950 text-rose-400 font-bold">
+                                  Sudah Tayang
+                                </option>
+                              </select>
+                            </td>
+                            <td className="py-3 px-3 min-w-[200px]">
+                              {(() => {
+                                const rawKdm = (film.kdm || '').replace(/^KDM:\s*/i, '').trim();
+                                const rawKdmUpper = rawKdm.toUpperCase();
+                                const isAktif = rawKdmUpper === 'AKTIF';
+                                const isTidakAktif =
+                                  rawKdmUpper === 'TIDAK AKTIF' ||
+                                  rawKdmUpper === 'TIDAK ADA' ||
+                                  rawKdmUpper === 'EXPIRED';
+                                const isManualDate = !isAktif && !isTidakAktif && rawKdm.length > 0;
+                                const currentSelectVal = isAktif
+                                  ? 'AKTIF'
+                                  : isTidakAktif
+                                  ? 'TIDAK AKTIF'
+                                  : 'MANUAL';
+
+                                return (
+                                  <div className="space-y-1.5">
+                                    <select
+                                      value={currentSelectVal}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === 'AKTIF') {
+                                          handleKdmChange(film.id, 'AKTIF');
+                                          if (editingKdmFilmId === film.id) setEditingKdmFilmId(null);
+                                        } else if (val === 'TIDAK AKTIF') {
+                                          handleKdmChange(film.id, 'TIDAK AKTIF');
+                                          if (editingKdmFilmId === film.id) setEditingKdmFilmId(null);
+                                        } else if (val === 'MANUAL') {
+                                          setEditingKdmFilmId(film.id);
+                                          setKdmDateInput(isManualDate ? rawKdm : '30-09-2026');
+                                        }
+                                      }}
+                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono border cursor-pointer w-full transition-colors ${
+                                        isAktif
+                                          ? 'bg-blue-950/90 text-blue-300 border-blue-500/50'
+                                          : isTidakAktif
+                                          ? 'bg-slate-950 text-slate-400 border-slate-700'
+                                          : 'bg-amber-950/90 text-amber-300 border-amber-500/60'
+                                      }`}
+                                    >
+                                      <option value="AKTIF">1. AKTIF</option>
+                                      <option value="TIDAK AKTIF">2. TIDAK AKTIF</option>
+                                      <option value="MANUAL">3. MASUKKAN KDM MANUAL</option>
+                                    </select>
+
+                                    {(currentSelectVal === 'MANUAL' || editingKdmFilmId === film.id) && (
+                                      <div className="p-2 rounded-lg bg-slate-950 border border-amber-500/50 space-y-1.5 animate-fade-in">
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-[10px] font-bold text-amber-300 font-mono">1 Tanggal KDM:</span>
+                                          {isManualDate && editingKdmFilmId !== film.id && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingKdmFilmId(film.id);
+                                                setKdmDateInput(rawKdm);
+                                              }}
+                                              className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 underline font-mono cursor-pointer"
+                                            >
+                                              Ubah
+                                            </button>
+                                          )}
+                                        </div>
+
+                                        {editingKdmFilmId === film.id ? (
+                                          <div className="flex items-center gap-1.5">
+                                            <input
+                                              type="text"
+                                              value={kdmDateInput}
+                                              onChange={(e) => setKdmDateInput(e.target.value)}
+                                              placeholder="Contoh: 30-09-2026"
+                                              className="flex-1 bg-slate-900 border border-amber-500/60 rounded px-2.5 py-1 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
+                                            />
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const finalVal = kdmDateInput.trim() || '30-09-2026';
+                                                handleKdmChange(film.id, finalVal);
+                                                setEditingKdmFilmId(null);
+                                              }}
+                                              className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer whitespace-nowrap"
+                                            >
+                                              OK
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="text-xs font-mono font-black text-amber-200 bg-amber-950/40 px-2 py-1 rounded border border-amber-500/30 flex items-center justify-between">
+                                            <span>{rawKdm || '30-09-2026'}</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                            <td className="py-3 px-3">
+                              <span className="px-2.5 py-1 rounded-md bg-slate-950 border border-cyan-500/30 text-cyan-300 text-xs font-bold">
+                                {getFormattedFormat(film.format_film)}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-slate-200 font-bold text-xs sm:text-sm">
+                              {film.format_sound || '5.1'}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              {/* Single Film Delete Button (Requirement G) */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteReportFilm(film.id, film.judul_film)}
+                                className="p-1.5 rounded-lg hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-500/40 transition cursor-pointer"
+                                title={`Hapus film "${film.judul_film}" dari Laporan`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             {/* Paper View Container A4 Landscape */}
             <div className={showPreview ? "overflow-x-auto pb-4 pt-2 animate-fade-in" : "absolute -left-[9999px] -top-[9999px] pointer-events-none"}>
               <div className="min-w-[850px] max-w-4xl mx-auto" id="printable-area-outer">
@@ -1151,7 +2401,12 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
                         LAPORAN FILM {branding.title.toUpperCase() || 'LIPPO MALL PURI XXI'}
                       </h1>
                       <p className="text-[11px] font-black uppercase font-sans text-gray-900 tracking-wider mt-1">
-                        MINGGU {activeReport.periode.toUpperCase()}
+                        {(() => {
+                          const displayPeriod = (activeReport?.periode || selectedWeek || currentWeekStr).toUpperCase();
+                          return displayPeriod.startsWith('MINGGU')
+                            ? displayPeriod
+                            : `PERIODE ${displayPeriod}`;
+                        })()}
                       </p>
                     </div>
 
@@ -1167,13 +2422,26 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredReportFilms.map((film, index) => {
-                          const status = film.status_tayang || 'BELUM TAYANG';
+                        {sortedReportFilms.length === 0 ? (
+                          <tr style={{ height: '90px' }}>
+                            <td
+                              colSpan={5}
+                              className="border border-black text-center text-gray-400 font-sans italic"
+                              style={{ border: '1px solid black', color: '#9ca3af', fontStyle: 'italic', padding: '36px 0', verticalAlign: 'middle', fontSize: '10px' }}
+                            >
+                              (Belum ada data film — Silakan lakukan import dari Seleksi Film Laporan)
+                            </td>
+                          </tr>
+                        ) : (
+                          sortedReportFilms.map((film, index) => {
+                          const status = (film.status_tayang || 'BELUM TAYANG').toUpperCase();
                           let textColor = '#000000';
                           if (status === 'SEDANG TAYANG') {
                             textColor = '#2E7D32';
                           } else if (status === 'SUDAH TAYANG') {
                             textColor = '#C62828';
+                          } else {
+                            textColor = '#000000';
                           }
 
                           const formattedFormat = getFormattedFormat(film.format_film);
@@ -1185,14 +2453,14 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
                                className="border-b border-black text-center" 
                                style={{ color: textColor, fontWeight: 'bold', fontSize: '9px', borderBottom: '1px solid black' }}
                              >
-                               <td className="border border-black text-center font-bold" style={{ border: '1px solid black', paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{index + 1}</td>
-                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{film.judul_film}</td>
-                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{status}</td>
-                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{formattedFormat}</td>
-                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{formattedKdm}</td>
+                               <td className="border border-black text-center font-bold" style={{ border: '1px solid black', color: textColor, paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{index + 1}</td>
+                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', color: textColor, paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{(film.judul_film || '').toUpperCase()}</td>
+                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', color: textColor, paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{status}</td>
+                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', color: textColor, paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{formattedFormat}</td>
+                               <td className="border border-black text-center uppercase tracking-tight font-extrabold" style={{ border: '1px solid black', color: textColor, paddingTop: '4px', paddingBottom: '8px', verticalAlign: 'middle' }}>{formattedKdm}</td>
                              </tr>
                           );
-                        })}
+                        }))}
                       </tbody>
                     </table>
 
@@ -1228,17 +2496,11 @@ export default function LaporanFilm({ filmUploads, branding }: LaporanFilmProps)
                             KAPASITAS PENYIMPANAN SETIAP SERVER<br/>DAN LIBBARY
                           </div>
                           <div className="divide-y divide-gray-300 font-mono text-[8.5px] font-bold text-black text-center">
-                            <div className="py-0.5">AAM ( LIBRARY ) : 18.5 TB</div>
-                            <div className="py-0.5">STD 1 IMS 2000 : 1.8 TB</div>
-                            <div className="py-0.5">STD 2 IMS 2000 : 1.8 TB</div>
-                            <div className="py-0.5">STD 3 DOREMI SV : 3.7 TB</div>
-                            <div className="py-0.5">STD 4 IMS 3000 : 10.7 TB</div>
-                            <div className="py-0.5">STD 5 IMS 2000 : 1.8 TB</div>
-                            <div className="py-0.5">STD 6 IMS 2000 : 3.5 TB</div>
-                            <div className="py-0.5">STD 7 DOREMI SV : 3.7 TB</div>
-                            <div className="py-0.5">STD 8 IMS 2000 : 1.8 TB</div>
-                            <div className="py-0.5">PREM 1 IMS 2000 : 1.8 TB</div>
-                            <div className="py-0.5">PREM 2 DOREMI SV : 7.3 TB</div>
+                            {serverConfigs.map((srv) => (
+                              <div key={srv.id} className="py-0.5">
+                                {srv.name.toUpperCase()} : {srv.capacityTb}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>

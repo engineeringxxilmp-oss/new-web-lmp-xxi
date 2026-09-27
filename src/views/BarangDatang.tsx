@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { BarangDatang, BarangStatus } from '../types';
-import { Plus, Edit2, Trash2, PackageCheck, Check, AlertCircle, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, PackageCheck, Check, AlertCircle, ChevronDown, CheckCircle2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getIndonesianDate, toISODate } from './PrEngineering';
@@ -333,14 +333,14 @@ export default function BarangDatangView({ items, onSave, onDelete }: BarangData
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingItem ? 'Ubah Penerimaan Barang' : 'Log Penerimaan Barang'}
+        title={editingItem ? 'UBAH PENERIMAAN BARANG' : 'LOG PENERIMAAN BARANG'}
+        maxWidth="md"
       >
-        <form onSubmit={handleSaveSubmit} className="space-y-5 font-sans" id="form-goods-arrival">
-          
+        <form onSubmit={handleSaveSubmit} className="space-y-6 font-mono text-sm" id="form-goods-arrival">
           {/* Tanggal */}
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-              Tanggal Barang Datang / Rencana Datang <span className="text-red-400">*</span>
+          <div>
+            <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+              Tanggal Barang Datang / Rencana Datang <span className="text-rose-400 font-bold">*</span>
             </label>
             <input
               type="date"
@@ -354,16 +354,16 @@ export default function BarangDatangView({ items, onSave, onDelete }: BarangData
                 }
                 setErrors({ ...errors, tanggalBarangDatang: '' });
               }}
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all"
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
               id="input-goods-arrival-date"
             />
-            {errors.tanggalBarangDatang && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.tanggalBarangDatang}</p>}
+            {errors.tanggalBarangDatang && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.tanggalBarangDatang}</p>}
           </div>
 
           {/* Nama Barang */}
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-              Nama Barang <span className="text-red-400">*</span>
+          <div>
+            <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+              Nama Barang <span className="text-rose-400 font-bold">*</span>
             </label>
             <input
               type="text"
@@ -373,17 +373,17 @@ export default function BarangDatangView({ items, onSave, onDelete }: BarangData
                 setErrors({ ...errors, namaBarang: '' });
               }}
               placeholder="Contoh: Lampu Xenon, Filter AC..."
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all placeholder:text-slate-500"
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
               id="input-goods-name"
             />
-            {errors.namaBarang && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.namaBarang}</p>}
+            {errors.namaBarang && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.namaBarang}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Quantity */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Quantity Diterima <span className="text-red-400">*</span>
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                Quantity Diterima <span className="text-rose-400 font-bold">*</span>
               </label>
               <input
                 type="number"
@@ -393,21 +393,21 @@ export default function BarangDatangView({ items, onSave, onDelete }: BarangData
                   setQuantity(Number(e.target.value));
                   setErrors({ ...errors, quantity: '' });
                 }}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all text-center"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all text-center shadow-inner"
                 id="input-goods-qty"
               />
-              {errors.quantity && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.quantity}</p>}
+              {errors.quantity && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.quantity}</p>}
             </div>
 
             {/* Status */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono">
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                 Status Transit
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as BarangStatus)}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all cursor-pointer"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
                 id="select-goods-status"
               >
                 <option value="Belum Dateng" className="text-slate-100 bg-slate-900">Belum Dateng</option>
@@ -418,41 +418,42 @@ export default function BarangDatangView({ items, onSave, onDelete }: BarangData
           </div>
 
           {/* Sesuai Order (Checkbox / Toggle) */}
-          <div className="space-y-1.5 p-4 rounded-xl bg-slate-900/90 border border-slate-700">
-            <div className="flex items-center gap-3">
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 shadow-inner">
+            <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={sesuaiOrder}
                 onChange={(e) => setSesuaiOrder(e.target.checked)}
-                className="h-5 w-5 text-blue-600 focus:ring-blue-500 rounded-sm border-gray-300 cursor-pointer"
+                className="h-5 w-5 rounded-md border-slate-700 bg-slate-950 text-amber-500 focus:ring-amber-400 focus:ring-offset-slate-900 cursor-pointer accent-amber-500"
                 id="checkbox-goods-matching"
               />
               <div>
-                <label htmlFor="checkbox-goods-matching" className="text-base md:text-lg font-black text-white cursor-pointer">
+                <span className="text-sm font-bold text-white block">
                   Kesesuaian Spesifikasi &amp; Jumlah
-                </label>
-                <p className="text-xs md:text-sm text-slate-300 font-medium leading-normal">
+                </span>
+                <span className="text-xs text-slate-400 font-normal">
                   Centang jika jumlah barang dan spesifikasi fisik sesuai dengan FKB / order awal.
-                </p>
+                </span>
               </div>
-            </div>
+            </label>
           </div>
 
           {/* Action buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
+              className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-cyan-600 px-6 py-2.5 text-sm md:text-base font-black text-white hover:bg-cyan-500 active:scale-95 shadow-md transition-all cursor-pointer"
+              className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
               id="btn-save-goods"
             >
-              <Check className="h-4 w-4" /> Simpan
+              <CheckCircle2 className="h-5 w-5" />
+              <span>Simpan Penerimaan</span>
             </button>
           </div>
         </form>

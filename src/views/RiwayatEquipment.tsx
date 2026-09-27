@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { RiwayatEquipment, Equipment, Area, EquipmentStatus } from '../types';
-import { Plus, Edit2, Trash2, History, Check, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, History, Check, ChevronDown, CheckCircle2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { getIndonesianDate } from './PrEngineering';
@@ -433,15 +433,15 @@ export default function RiwayatEquipmentView({
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingRiwayat ? 'Ubah Riwayat Pemeliharaan' : 'Log Riwayat Pemeliharaan'}
+        title={editingRiwayat ? 'UBAH RIWAYAT PEMELIHARAAN' : 'LOG RIWAYAT PEMELIHARAAN'}
+        maxWidth="lg"
       >
-        <form onSubmit={handleSaveSubmit} className="space-y-5 font-sans" id="form-history-add">
-          
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSaveSubmit} className="space-y-6 font-mono text-sm" id="form-history-add">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             {/* Equipment Input */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Pilih Equipment <span className="text-red-400">*</span>
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                Pilih Equipment <span className="text-rose-400 font-bold">*</span>
               </label>
               <input
                 type="text"
@@ -451,16 +451,16 @@ export default function RiwayatEquipmentView({
                   setErrors({ ...errors, equipmentId: '' });
                 }}
                 placeholder="Ketik nama equipment..."
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all placeholder:text-slate-500"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 id="input-history-eq"
               />
-              {errors.equipmentId && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.equipmentId}</p>}
+              {errors.equipmentId && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.equipmentId}</p>}
             </div>
 
             {/* Area */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Area Kejadian <span className="text-red-400">*</span>
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                Area Kejadian <span className="text-rose-400 font-bold">*</span>
               </label>
               <input
                 type="text"
@@ -470,18 +470,18 @@ export default function RiwayatEquipmentView({
                   setErrors({ ...errors, areaId: '' });
                 }}
                 placeholder="Ketik area kejadian..."
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all placeholder:text-slate-500"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 id="input-history-area"
               />
-              {errors.areaId && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.areaId}</p>}
+              {errors.areaId && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.areaId}</p>}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             {/* Tanggal Mulai */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Tanggal Mulai Servis <span className="text-red-400">*</span>
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                Tanggal Mulai Servis <span className="text-rose-400 font-bold">*</span>
               </label>
               <input
                 type="date"
@@ -495,16 +495,16 @@ export default function RiwayatEquipmentView({
                   }
                   setErrors({ ...errors, tanggalMulai: '' });
                 }}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 id="input-history-date-start"
               />
-              {errors.tanggalMulai && <p className="text-sm font-semibold text-rose-500 mt-0.5">{errors.tanggalMulai}</p>}
+              {errors.tanggalMulai && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.tanggalMulai}</p>}
             </div>
 
             {/* Tanggal Selesai */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Tanggal Selesai <span className="text-slate-300 font-normal font-sans text-xs">(Opsional)</span>
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                Tanggal Selesai <span className="text-slate-500 font-normal text-xs">(Opsional)</span>
               </label>
               <input
                 type="date"
@@ -517,76 +517,77 @@ export default function RiwayatEquipmentView({
                     setTanggalSelesai('');
                   }
                 }}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 id="input-history-date-end"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
             {/* Barang Yang Diganti */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-                Suku Cadang Diganti <span className="text-slate-300 font-normal font-sans text-xs">(Opsional)</span>
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                Suku Cadang Diganti <span className="text-slate-500 font-normal text-xs">(Opsional)</span>
               </label>
               <input
                 type="text"
                 value={barangYangDiganti}
                 onChange={(e) => setBarangYangDiganti(e.target.value)}
-                placeholder="Contoh: Valve Expansion York, Oli Compressor..."
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all placeholder:text-slate-500"
+                placeholder="Contoh: Valve Expansion, Oli Compressor..."
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 id="input-history-replaced-parts"
               />
             </div>
 
             {/* Status Akhir */}
-            <div className="space-y-1.5">
-              <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono">
+            <div>
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                 Kondisi Akhir Alat
               </label>
               <select
                 value={status === 'Maintenance' ? 'Perbaikan' : status}
                 onChange={(e) => setStatus(e.target.value as EquipmentStatus)}
-                className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all cursor-pointer"
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
                 id="select-history-status"
               >
-                <option value="Normal" className="text-slate-100 bg-slate-900 font-bold">NORMAL</option>
-                <option value="Perbaikan" className="text-slate-100 bg-slate-900 font-bold">PERBAIKAN</option>
-                <option value="Rusak" className="text-slate-100 bg-slate-900 font-bold">RUSAK</option>
+                <option value="Normal" className="text-emerald-400 bg-slate-900 font-bold py-2">NORMAL</option>
+                <option value="Perbaikan" className="text-amber-400 bg-slate-900 font-bold py-2">PERBAIKAN</option>
+                <option value="Rusak" className="text-rose-400 bg-slate-900 font-bold py-2">RUSAK</option>
               </select>
             </div>
           </div>
 
           {/* Keterangan */}
-          <div className="space-y-1.5">
-            <label className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-1">
-              Deskripsi Tindakan Perbaikan <span className="text-slate-300 font-normal font-sans text-xs">(Opsional)</span>
+          <div>
+            <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+              Deskripsi Tindakan Perbaikan <span className="text-slate-500 font-normal text-xs">(Opsional)</span>
             </label>
             <textarea
               rows={3}
               value={keterangan}
               onChange={(e) => setKeterangan(e.target.value)}
               placeholder="Tulis kronologi perbaikan secara rinci..."
-              className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-950 focus:border-cyan-400 focus:outline-hidden transition-all placeholder:text-slate-500 resize-none"
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all resize-none shadow-inner leading-relaxed"
               id="input-history-desc"
             />
           </div>
 
           {/* Save buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
+              className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-cyan-600 px-6 py-2.5 text-sm md:text-base font-black text-white hover:bg-cyan-500 active:scale-95 shadow-md transition-all cursor-pointer"
+              className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
               id="btn-save-history"
             >
-              <Check className="h-4 w-4" /> Simpan
+              <CheckCircle2 className="h-5 w-5" />
+              <span>Simpan Riwayat</span>
             </button>
           </div>
         </form>

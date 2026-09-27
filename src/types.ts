@@ -20,13 +20,14 @@ export interface Equipment {
   keterangan: string;
 }
 
-export type PrCategory = 'PR AC' | 'PR Projector' | 'PR Building' | 'PR Studio' | 'PR Engineering';
+export type PrCategory = 'PR OPR' | 'PR AC' | 'PR TEKNIK' | 'PR Projector' | 'PR Building' | 'PR Studio' | 'PR Engineering';
 export type PrStatus = 'Belum Dikerjakan' | 'Sedang Diproses' | 'Selesai' | 'Belum Di Kerjakan' | 'Sedang Di Proses';
 
 export interface PrEngineering {
   id: string;
   category: PrCategory;
   areaId: string; // References Area.id
+  equipmentId?: string; // Optional reference to Equipment.id
   keluhan: string;
   tanggalPenemuan: string; // format: "10 Juli 2026"
   tanggalSelesai: string; // format: "10 Juli 2026" atau ""
@@ -34,10 +35,12 @@ export interface PrEngineering {
   keterangan: string;
 }
 
+export type VendorCategory = 'SERVICE TEKNIK' | 'SERVICE AC' | 'SERVICE OPR';
 export type VendorStatus = 'Belum' | 'On Progress' | 'Selesai' | 'Belum Di Kerjakan' | 'Sedang Di Proses' | 'Belum Dikerjakan' | 'Sedang Diproses';
 
 export interface VendorTeknisi {
   id: string;
+  category?: VendorCategory;
   namaVendor: string;
   namaTeknisi: string;
   tanggal: string; // format: "10 Juli 2026" (Tanggal Visit Mulai)
@@ -48,6 +51,63 @@ export interface VendorTeknisi {
   hasilPekerjaan: string;
   status: VendorStatus;
   siapaYangNemenin?: string;
+}
+
+export interface ServerConfigItem {
+  id: string;
+  name: string;
+  capacityTb: string;
+}
+
+export const DEFAULT_SERVER_CONFIGS: ServerConfigItem[] = [
+  { id: 'srv-std1', name: 'Studio 1', capacityTb: '1.8 TB' },
+  { id: 'srv-std2', name: 'Studio 2', capacityTb: '1.8 TB' },
+  { id: 'srv-std3', name: 'Studio 3', capacityTb: '3.7 TB' },
+  { id: 'srv-std4', name: 'Studio 4', capacityTb: '10.7 TB' },
+  { id: 'srv-std5', name: 'Studio 5', capacityTb: '1.8 TB' },
+  { id: 'srv-std6', name: 'Studio 6', capacityTb: '3.5 TB' },
+  { id: 'srv-std7', name: 'Studio 7', capacityTb: '3.7 TB' },
+  { id: 'srv-std8', name: 'Studio 8', capacityTb: '1.8 TB' },
+  { id: 'srv-prem1', name: 'Premiere 1', capacityTb: '1.8 TB' },
+  { id: 'srv-prem2', name: 'Premiere 2', capacityTb: '7.3 TB' },
+  { id: 'srv-library', name: 'Library / AHM', capacityTb: '18.5 TB' }
+];
+
+export interface BalasanManagerItem {
+  id: string;
+  periode: string;
+  fileUrl?: string;
+  fileName: string;
+  fileType: 'image' | 'pdf';
+  uploadedAt?: string;
+  tanggalUpload?: string;
+  fileData?: string;
+  catatan?: string;
+  catatanManager?: string;
+  driveLink?: string;
+  driveSynced?: boolean;
+  namaManager?: string;
+  tanggalKeputusan?: string;
+  filmDihapus?: string;
+  filmDipertahankan?: string;
+  status: 'Sudah Dibalas' | 'Menunggu Balasan';
+}
+
+export interface JadwalFilmItem {
+  id: string;
+  tanggalJadwal?: string;
+  tanggal?: string;
+  imageUrl?: string;
+  gambarJadwal?: string;
+  studio?: string;
+  detectedTitles?: string[];
+  judulTerdeteksi?: string[];
+  matchedFilmTitles?: string[];
+  unmatchedFilmTitles?: string[];
+  uploadedAt?: string;
+  driveLink?: string;
+  driveSynced?: boolean;
+  catatan?: string;
 }
 
 export type FkbStatus = 'Belum Naik FKB' | 'Sudah Naik FKB' | 'Belum Naik FPKB' | 'Sudah Naik FPKB';
@@ -82,8 +142,8 @@ export interface RiwayatEquipment {
   keterangan: string;
 }
 
-export type FormatFilm = '2D FLAT' | '2D SCOPE' | '3D' | 'IMAX' | 'ATMOS';
-export type FormatSound = '5.1' | '7.1' | '7.1 ATMOS';
+export type FormatFilm = '2D Scoop' | '2D Flat' | '3D Scoop' | '3D Flat' | '2D FLAT' | '2D SCOPE' | '3D' | 'IMAX' | 'ATMOS' | string;
+export type FormatSound = '5.1' | '7.1' | 'Atmos' | '7.1 ATMOS' | string;
 export type StatusTayang = 'BELUM TAYANG' | 'SEDANG TAYANG' | 'SUDAH TAYANG';
 
 export interface FilmUpload {
@@ -99,6 +159,9 @@ export interface FilmUpload {
   keterangan: string;
   created_at: string;
   updated_at: string;
+  studio?: string;
+  tanggal_kdm?: string;
+  tahun?: string;
 }
 
 export interface WeeklyReport {

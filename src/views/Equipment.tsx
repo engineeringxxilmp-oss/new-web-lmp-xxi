@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Equipment, Area, EquipmentStatus } from '../types';
-import { Plus, Edit2, Trash2, Wrench, ShieldAlert, Check, HelpCircle, ChevronDown } from 'lucide-react';
+import { Plus, Edit2, Trash2, Wrench, ShieldAlert, Check, HelpCircle, ChevronDown, CheckCircle2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -65,6 +65,24 @@ export default function EquipmentView({ equipment, areas, onSave, onDelete }: Eq
     setErrors({});
     setIsModalOpen(true);
   };
+
+  // Pastikan ukuran modal Equipment compact (750-850px, target 800px) terpusat di desktop
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const timer = setTimeout(() => {
+      const formEl = document.getElementById('form-equipment');
+      if (formEl) {
+        const card = formEl.closest('#modal-card') as HTMLElement;
+        if (card) {
+          card.style.width = 'min(92vw, 800px)';
+          card.style.maxWidth = '800px';
+          card.style.marginLeft = 'auto';
+          card.style.marginRight = 'auto';
+        }
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [isModalOpen]);
 
   const handleSaveSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -354,134 +372,124 @@ export default function EquipmentView({ equipment, areas, onSave, onDelete }: Eq
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={editingEq ? '🔧 Ubah Data Equipment' : '➕ Tambah Equipment Baru'}
-        maxWidth="4xl"
+        title={editingEq ? 'UBAH DATA EQUIPMENT' : 'TAMBAH EQUIPMENT BARU'}
+        maxWidth="md"
       >
-        <form onSubmit={handleSaveSubmit} className="space-y-5 font-sans" id="form-equipment">
-          
-          {/* Top small reminder message */}
-          <div className="text-xs md:text-sm text-cyan-200 bg-cyan-950/60 px-3.5 py-2.5 rounded-xl border border-cyan-500/30 flex items-center gap-2 leading-none">
-            <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#00f0ff]" />
-            <span className="font-semibold">Mohon isi detail equipment bioskop dengan lengkap.</span>
+        <form onSubmit={handleSaveSubmit} className="space-y-6 font-mono text-sm" id="form-equipment">
+          {/* BARIS 1: Nama Equipment (65%) | Quantity (35%) */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* Nama Equipment (65%) */}
+            <div className="md:col-span-8 space-y-1.5">
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                Nama Equipment <span className="text-rose-400 font-bold">*</span>
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setErrors({ ...errors, name: '' });
+                }}
+                placeholder="Contoh: Chiller York 50 TR, Projector Barco..."
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
+                id="input-eq-name"
+              />
+              {errors.name && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.name}</p>}
+            </div>
+
+            {/* Quantity (35%) */}
+            <div className="md:col-span-4 space-y-1.5">
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider whitespace-nowrap">
+                Quantity <span className="text-rose-400 font-bold">*</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => {
+                  setQuantity(Number(e.target.value));
+                  setErrors({ ...errors, quantity: '' });
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-emerald-400 text-sm sm:text-base font-black text-center font-mono focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
+                id="input-eq-qty"
+              />
+              {errors.quantity && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.quantity}</p>}
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {/* Left Column */}
-            <div className="space-y-4">
-              {/* Equipment Name */}
-              <div className="space-y-1.5">
-                <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                  Nama Equipment <span className="text-rose-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    setErrors({ ...errors, name: '' });
-                  }}
-                  placeholder="Contoh: Chiller York 50 TR, Projector Barco..."
-                  className="w-full h-12 md:h-13 rounded-xl border-2 border-slate-700 px-4 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all placeholder:text-slate-500"
-                  id="input-eq-name"
-                />
-                {errors.name && <p className="text-sm font-semibold text-rose-400 mt-0.5">{errors.name}</p>}
-              </div>
-
-              {/* Area Selector */}
-              <div className="space-y-1.5">
-                <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                  Area Penempatan <span className="text-rose-400">*</span>
-                </label>
-                <select
-                  value={areaId}
-                  onChange={(e) => {
-                    setAreaId(e.target.value);
-                    setErrors({ ...errors, areaId: '' });
-                  }}
-                  className="w-full h-12 md:h-13 rounded-xl border-2 border-slate-700 px-4 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all cursor-pointer"
-                  id="select-eq-area"
-                >
-                  <option value="" disabled className="text-slate-500 bg-slate-900">Pilih Area...</option>
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.id} className="text-white bg-slate-900">{a.name}</option>
-                  ))}
-                </select>
-                {errors.areaId && <p className="text-sm font-semibold text-rose-400 mt-0.5">{errors.areaId}</p>}
-              </div>
+          {/* BARIS 2: Status Kondisi (35%) | Area Penempatan (65%) */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            {/* Status Kondisi (35%) */}
+            <div className="md:col-span-5 space-y-1.5">
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider whitespace-nowrap">
+                Status Kondisi
+              </label>
+              <select
+                value={status === 'Maintenance' ? 'Perbaikan' : status}
+                onChange={(e) => setStatus(e.target.value as EquipmentStatus)}
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer font-mono shadow-inner"
+                id="select-eq-status"
+              >
+                <option value="Normal" className="text-emerald-400 bg-slate-900 font-bold">NORMAL</option>
+                <option value="Perbaikan" className="text-amber-400 bg-slate-900 font-bold">PERBAIKAN</option>
+                <option value="Rusak" className="text-rose-400 bg-slate-900 font-bold">RUSAK</option>
+              </select>
             </div>
 
-            {/* Right Column */}
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {/* Quantity */}
-                <div className="space-y-1.5">
-                  <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                    Quantity <span className="text-rose-400">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => {
-                      setQuantity(Number(e.target.value));
-                      setErrors({ ...errors, quantity: '' });
-                    }}
-                    className="w-full h-12 md:h-13 rounded-xl border-2 border-slate-700 px-4 text-base md:text-lg font-bold text-emerald-300 bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all text-center font-mono"
-                    id="input-eq-qty"
-                  />
-                  {errors.quantity && <p className="text-sm font-semibold text-rose-400 mt-0.5">{errors.quantity}</p>}
-                </div>
-
-                {/* Status */}
-                <div className="space-y-1.5">
-                  <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                    Status Kondisi
-                  </label>
-                  <select
-                    value={status === 'Maintenance' ? 'Perbaikan' : status}
-                    onChange={(e) => setStatus(e.target.value as EquipmentStatus)}
-                    className="w-full h-12 md:h-13 rounded-xl border-2 border-slate-700 px-4 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all cursor-pointer font-mono"
-                    id="select-eq-status"
-                  >
-                    <option value="Normal" className="text-emerald-400 bg-slate-900 font-bold">NORMAL</option>
-                    <option value="Perbaikan" className="text-amber-400 bg-slate-900 font-bold">PERBAIKAN</option>
-                    <option value="Rusak" className="text-rose-400 bg-slate-900 font-bold">RUSAK</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Keterangan */}
-              <div className="space-y-1.5">
-                <label className="text-base md:text-lg font-black text-cyan-300 uppercase tracking-wider font-mono flex items-center gap-1">
-                  Keterangan Tambahan <span className="text-slate-400 font-normal font-sans text-xs">(Opsional)</span>
-                </label>
-                <textarea
-                  rows={2.5}
-                  value={keterangan}
-                  onChange={(e) => setKeterangan(e.target.value)}
-                  placeholder="Tulis perawatan terbaru, serial komponen, atau kendala..."
-                  className="w-full rounded-xl border-2 border-slate-700 px-4 py-3 text-base md:text-lg font-bold text-white bg-slate-900/90 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20 focus:outline-hidden transition-all placeholder:text-slate-500 resize-none"
-                  id="input-eq-desc"
-                />
-              </div>
+            {/* Area Penempatan (65%) */}
+            <div className="md:col-span-7 space-y-1.5">
+              <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+                Area Penempatan <span className="text-rose-400 font-bold">*</span>
+              </label>
+              <select
+                value={areaId}
+                onChange={(e) => {
+                  setAreaId(e.target.value);
+                  setErrors({ ...errors, areaId: '' });
+                }}
+                className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm sm:text-base font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
+                id="select-eq-area"
+              >
+                <option value="" disabled className="text-slate-500 bg-slate-900">Pilih Area...</option>
+                {areas.map((a) => (
+                  <option key={a.id} value={a.id} className="text-white bg-slate-900">{a.name}</option>
+                ))}
+              </select>
+              {errors.areaId && <p className="text-xs font-semibold text-rose-400 mt-1 flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-rose-400" />{errors.areaId}</p>}
             </div>
+          </div>
+
+          {/* BARIS 3: Keterangan Tambahan (Full Width) */}
+          <div className="space-y-1.5">
+            <label className="block text-slate-300 font-bold uppercase mb-2 text-xs sm:text-sm tracking-wider">
+              Keterangan Tambahan <span className="text-slate-500 font-normal lowercase tracking-normal">(opsional)</span>
+            </label>
+            <textarea
+              rows={2}
+              value={keterangan}
+              onChange={(e) => setKeterangan(e.target.value)}
+              placeholder="Tulis perawatan terbaru, serial komponen, atau kendala..."
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-medium placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all leading-relaxed shadow-inner resize-none"
+              id="input-eq-desc"
+            />
           </div>
 
           {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800 mt-4">
+          <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
-              className="rounded-xl px-5 py-2.5 text-sm md:text-base font-bold text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 active:scale-95 transition-all cursor-pointer"
+              className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 border border-cyan-400/50 px-6 py-2.5 text-sm md:text-base font-black text-white active:scale-95 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all cursor-pointer"
+              className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
               id="btn-save-eq"
             >
-              <Check className="h-4 w-4 stroke-[2.5]" /> Simpan Equipment
+              <CheckCircle2 className="h-5 w-5" />
+              <span>Simpan Equipment</span>
             </button>
           </div>
         </form>

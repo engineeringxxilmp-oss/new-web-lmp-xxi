@@ -28,6 +28,7 @@ import {
   Layers,
   Building,
   Tv,
+  CheckCircle2,
   Cpu,
   Lock,
   ChevronDown,
@@ -1188,43 +1189,53 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
 
       {/* MODAL 1: ADD / EDIT DEVICE */}
       {isDeviceModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 sm:p-6 overflow-y-auto animate-fade-in">
-          <div className="bg-[#0a1120] border-2 border-cyan-500/50 rounded-3xl w-full max-w-3xl overflow-hidden shadow-[0_0_60px_rgba(0,240,255,0.3)] my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto animate-fade-in">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl sm:max-w-3xl w-full text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] my-auto max-h-[92vh] flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-[#070b16] border-b border-cyan-500/30 px-6 sm:px-8 py-5 flex items-center justify-between">
-              <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3">
-                <Shield className="h-7 w-7 text-cyan-400 shrink-0" />
-                <span>{editingDevice ? 'Edit Data Perangkat & Credential' : 'Tambah Perangkat & Credential Baru'}</span>
-              </h3>
+            <div className="px-6 sm:px-8 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-900 shrink-0">
+              <div className="flex items-center gap-3 text-amber-400 font-mono font-bold text-base sm:text-lg">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24] block" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
+                    {editingDevice ? 'Ubah Data Perangkat & Kredensial' : 'Tambah Perangkat & Kredensial Baru'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    Lippo Mall Puri XXI — IP & Credential Management
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsDeviceModalOpen(false)}
-                className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
+                className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors border border-transparent hover:border-slate-700 active:scale-95"
+                title="Tutup Modal"
               >
                 <X className="h-6 w-6" />
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSaveDevice} className="p-6 sm:p-8 space-y-6 max-h-[82vh] overflow-y-auto">
+            <form onSubmit={handleSaveDevice} className="p-6 sm:p-8 space-y-6 overflow-y-auto font-mono text-sm">
               {/* SECTION 1: LOCATION & AREA */}
-              <div className="space-y-3 bg-[#050b17] p-4 sm:p-5 rounded-2xl border border-slate-800">
-                <h4 className="text-sm font-mono font-black text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-cyan-400" />
+              <div className="space-y-4 bg-slate-950/80 p-5 rounded-xl border border-slate-800 shadow-inner">
+                <h4 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-amber-400" />
                   <span>1. LOKASI & AREA PERANGKAT</span>
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
-                      AREA PERANGKAT *
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                      AREA PERANGKAT <span className="text-rose-400 font-bold">*</span>
                     </label>
                     <select
                       value={formData.area}
                       onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-base font-bold text-white focus:outline-none cursor-pointer uppercase"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner uppercase"
                     >
                       {areas.map((a) => (
-                        <option key={a} value={a} className="uppercase">
+                        <option key={a} value={a} className="bg-slate-900 text-white py-2 uppercase">
                           📍 {a.toUpperCase()}
                         </option>
                       ))}
@@ -1232,39 +1243,39 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                   </div>
 
                   <div>
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
-                      STUDIO / SPESIFIKASI LOKASI *
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                      STUDIO / SPESIFIKASI LOKASI <span className="text-rose-400 font-bold">*</span>
                     </label>
                     <input
                       type="text"
                       placeholder="Contoh: Studio 1, Loket 1, Server Room, Ruang Engineering"
                       value={formData.location}
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-base font-bold text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     />
                   </div>
                 </div>
               </div>
 
               {/* SECTION 2: DEVICE INFORMATION */}
-              <div className="space-y-3 bg-[#050b17] p-4 sm:p-5 rounded-2xl border border-slate-800">
-                <h4 className="text-sm font-mono font-black text-cyan-300 uppercase tracking-wider flex items-center gap-2">
-                  <Server className="h-4 w-4 text-cyan-400" />
+              <div className="space-y-4 bg-slate-950/80 p-5 rounded-xl border border-slate-800 shadow-inner">
+                <h4 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                  <Server className="h-4 w-4 text-amber-400" />
                   <span>2. INFORMASI IDENTITAS PERANGKAT</span>
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
-                      KATEGORI *
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                      KATEGORI <span className="text-rose-400 font-bold">*</span>
                     </label>
                     <select
                       value={formData.category}
                       onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-base font-bold text-white focus:outline-none cursor-pointer uppercase"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner uppercase"
                     >
                       {categories.map((c) => (
-                        <option key={c} value={c} className="uppercase">
+                        <option key={c} value={c} className="bg-slate-900 text-white py-2 uppercase">
                           📦 {c.toUpperCase()}
                         </option>
                       ))}
@@ -1272,22 +1283,22 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
-                      NAMA PERANGKAT *
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                      NAMA PERANGKAT <span className="text-rose-400 font-bold">*</span>
                     </label>
                     <input
                       type="text"
                       placeholder="Contoh: Projector Barco DP4K-19B Studio 1"
                       value={formData.deviceName}
                       onChange={(e) => setFormData({ ...formData, deviceName: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-base font-bold text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                       NICKNAME / ALIAS
                     </label>
                     <input
@@ -1295,48 +1306,47 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                       placeholder="Contoh: PROJ-S1"
                       value={formData.nickname}
                       onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-base font-bold text-white placeholder-slate-500 focus:outline-none font-mono"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner font-mono"
                     />
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
-                      DESKRIPSI / CATATAN AKSEK
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
+                      DESKRIPSI / CATATAN
                     </label>
                     <input
                       type="text"
                       placeholder="Contoh: Projector utama pementasan film Studio 1"
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-base font-bold text-white placeholder-slate-500 focus:outline-none"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     />
                   </div>
                 </div>
               </div>
 
               {/* SECTION 3: NETWORK INFORMATION */}
-              <div className="space-y-3 bg-[#050b17] p-4 sm:p-5 rounded-2xl border border-slate-800">
-                <h4 className="text-sm font-mono font-black text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+              <div className="space-y-4 bg-slate-950/80 p-5 rounded-xl border border-slate-800 shadow-inner">
+                <h4 className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
                   <Globe className="h-4 w-4 text-emerald-400" />
                   <span>3. KONFIGURASI JARINGAN & NETWORK</span>
                 </h4>
 
                 {/* Duplicate IP Warning Banner */}
                 {duplicateIpDevice && (
-                  <div className="p-3.5 rounded-2xl bg-amber-950/90 border-2 border-amber-500/60 text-amber-200 text-xs sm:text-sm font-mono flex items-start gap-3 animate-pulse">
+                  <div className="p-3.5 rounded-xl bg-amber-950/80 border border-amber-500/60 text-amber-200 text-xs font-mono flex items-start gap-3">
                     <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
                     <div>
                       <strong className="block text-amber-300 font-bold">⚠️ PERINGATAN DUPLIKASI IP ADDRESS!</strong>
                       IP Address <strong>"{formData.ipAddress}"</strong> sudah terdaftar pada perangkat:{' '}
                       <strong className="underline">{duplicateIpDevice.deviceName}</strong> ({duplicateIpDevice.area} - {duplicateIpDevice.location}).
-                      Anda tetap dapat menyimpannya jika ini adalah IP terbagi (shared network node).
                     </div>
                   </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                       IP ADDRESS
                     </label>
                     <input
@@ -1344,12 +1354,12 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                       placeholder="Contoh: 192.168.10.101"
                       value={formData.ipAddress}
                       onChange={(e) => setFormData({ ...formData, ipAddress: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-base font-bold text-emerald-300 font-mono placeholder-slate-600 focus:outline-none"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-emerald-400 text-sm font-black font-mono placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                       PORT
                     </label>
                     <input
@@ -1357,12 +1367,12 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                       placeholder="Contoh: 8080, 80, 443"
                       value={formData.port}
                       onChange={(e) => setFormData({ ...formData, port: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-base font-bold text-amber-300 font-mono placeholder-slate-600 focus:outline-none"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-amber-300 text-sm font-black font-mono placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
+                    <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                       WEB INTERFACE / URL
                     </label>
                     <input
@@ -1370,13 +1380,13 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                       placeholder="Contoh: http://192.168.10.101:8080"
                       value={formData.webInterfaceUrl}
                       onChange={(e) => setFormData({ ...formData, webInterfaceUrl: e.target.value })}
-                      className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-base font-bold text-cyan-300 font-mono text-xs placeholder-slate-600 focus:outline-none"
+                      className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-cyan-300 text-xs font-mono placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-mono font-black text-slate-100 mb-1.5">
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                     CATATAN TAMBAHAN JARINGAN
                   </label>
                   <input
@@ -1384,15 +1394,15 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                     placeholder="Contoh: VLAN 10 Cinema Equipment / Switch Port 24"
                     value={formData.networkNotes}
                     onChange={(e) => setFormData({ ...formData, networkNotes: e.target.value })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-sm font-bold text-slate-200 placeholder-slate-600 focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-slate-200 text-xs font-medium placeholder:text-slate-600 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                   />
                 </div>
               </div>
 
               {/* SECTION 4: MULTIPLE CREDENTIALS */}
-              <div className="space-y-4 bg-[#050b17] p-4 sm:p-5 rounded-2xl border border-slate-800/90 shadow-lg">
+              <div className="space-y-4 bg-slate-950/80 p-5 rounded-xl border border-slate-800 shadow-inner">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-                  <h4 className="text-sm font-mono font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                  <h4 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
                     <Key className="h-4 w-4 text-amber-400 shrink-0" />
                     <span>4. KREDENSIAL AKSES USER & PASSWORD ({formData.credentials.length})</span>
                   </h4>
@@ -1411,9 +1421,9 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                   {formData.credentials.map((cred, idx) => (
                     <div
                       key={cred.id}
-                      className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 hover:border-slate-700/80 space-y-3 relative transition-all shadow-md"
+                      className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 space-y-3 relative transition-all shadow-md"
                     >
-                      <div className="flex items-center justify-between border-b border-slate-900 pb-2.5">
+                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
                         <div className="flex items-center gap-2">
                           <span className="text-[11px] font-mono font-black text-amber-400 bg-amber-950/70 px-2.5 py-1 rounded-lg border border-amber-500/30">
                             AKSES #{idx + 1}
@@ -1446,7 +1456,7 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                             placeholder="Contoh: Administrator, Operator"
                             value={cred.nickname}
                             onChange={(e) => handleCredentialChange(cred.id, 'nickname', e.target.value)}
-                            className="w-full bg-slate-900/90 border border-slate-700/80 focus:border-amber-400 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-white placeholder:text-slate-600 focus:outline-none transition-all"
+                            className="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-white placeholder:text-slate-600 focus:outline-none transition-all"
                           />
                         </div>
 
@@ -1459,7 +1469,7 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                             placeholder="Contoh: admin"
                             value={cred.username}
                             onChange={(e) => handleCredentialChange(cred.id, 'username', e.target.value)}
-                            className="w-full bg-slate-900/90 border border-slate-700/80 focus:border-cyan-400 rounded-xl px-3 py-2 text-xs sm:text-sm font-black text-cyan-300 placeholder:text-slate-600 focus:outline-none font-mono transition-all"
+                            className="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl px-3 py-2 text-xs sm:text-sm font-black text-cyan-300 placeholder:text-slate-600 focus:outline-none font-mono transition-all"
                           />
                         </div>
 
@@ -1473,7 +1483,7 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                               placeholder="Password..."
                               value={cred.password}
                               onChange={(e) => handleCredentialChange(cred.id, 'password', e.target.value)}
-                              className="w-full bg-slate-900/90 border border-slate-700/80 focus:border-amber-400 rounded-xl pl-3 pr-9 py-2 text-xs sm:text-sm font-black text-amber-300 placeholder:text-slate-600 focus:outline-none font-mono tracking-wider transition-all"
+                              className="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl pl-3 pr-9 py-2 text-xs sm:text-sm font-black text-amber-300 placeholder:text-slate-600 focus:outline-none font-mono tracking-wider transition-all"
                             />
                             <button
                               type="button"
@@ -1499,7 +1509,7 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                             placeholder="Contoh: Full Access / Viewer"
                             value={cred.role || ''}
                             onChange={(e) => handleCredentialChange(cred.id, 'role', e.target.value)}
-                            className="w-full bg-slate-900/90 border border-slate-700/80 focus:border-amber-400 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all"
+                            className="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-400 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-200 placeholder:text-slate-600 focus:outline-none transition-all"
                           />
                         </div>
                       </div>
@@ -1509,19 +1519,20 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
               </div>
 
               {/* ACTION BUTTONS */}
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsDeviceModalOpen(false)}
-                  className="px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-mono font-black transition-all cursor-pointer"
+                  className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
                 >
-                  BATAL
+                  Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-7 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-white font-mono font-black text-sm tracking-wide shadow-[0_0_25px_rgba(0,240,255,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer border border-cyan-300"
+                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
                 >
-                  {editingDevice ? 'SIMPAN PERUBAHAN' : 'SIMPAN PERANGKAT BARU'}
+                  <CheckCircle2 className="h-5 w-5" />
+                  <span>{editingDevice ? 'Simpan Perubahan' : 'Simpan Perangkat Baru'}</span>
                 </button>
               </div>
             </form>
@@ -1768,16 +1779,26 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
 
       {/* MODAL 4: ADD AREA / CATEGORY DYNAMICALLY */}
       {isAddAreaCatModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
-          <div className="bg-[#0a1120] border-2 border-cyan-500/50 rounded-3xl w-full max-w-lg overflow-hidden shadow-[0_0_50px_rgba(0,240,255,0.3)] p-6 sm:p-8 space-y-6 my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-slate-900 border border-amber-500/50 rounded-2xl w-full max-w-lg overflow-hidden shadow-[0_0_60px_rgba(251,191,36,0.25)] p-6 sm:p-8 space-y-6 my-auto text-white">
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-              <h3 className="text-lg sm:text-xl font-black text-white font-mono flex items-center gap-2">
-                <Layers className="h-6 w-6 text-amber-400" />
-                <span>Kelola Master Area & Kategori</span>
-              </h3>
+              <div className="flex items-center gap-3 text-amber-400 font-mono font-bold text-base sm:text-lg">
+                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner">
+                  <Layers className="h-5 w-5 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white tracking-wide uppercase">
+                    Kelola Master Area & Kategori
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    Lippo Mall Puri XXI — Dynamic Metadata
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsAddAreaCatModalOpen(false)}
-                className="p-1.5 rounded-xl bg-slate-800 text-slate-300 hover:text-white"
+                className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors border border-transparent hover:border-slate-700 active:scale-95"
+                title="Tutup Modal"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1785,8 +1806,8 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
 
             {/* Add New Area */}
             <div className="space-y-2">
-              <label className="block text-xs font-mono font-bold text-cyan-300 uppercase">
-                + TAMBAH AREA BARU
+              <label className="block text-slate-300 font-bold uppercase text-xs font-mono tracking-wider">
+                + Tambah Area Baru
               </label>
               <div className="flex gap-2">
                 <input
@@ -1794,11 +1815,11 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                   placeholder="Contoh: Studio 9, Control Room, Booth VVIP"
                   value={newAreaInput}
                   onChange={(e) => setNewAreaInput(e.target.value)}
-                  className="flex-1 bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-xl px-4 py-2.5 text-sm text-white font-bold"
+                  className="flex-1 px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 />
                 <button
                   onClick={handleAddArea}
-                  className="px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono font-bold text-xs cursor-pointer"
+                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs cursor-pointer transition-all active:scale-95 shadow-[0_0_15px_rgba(251,191,36,0.3)]"
                 >
                   Tambah
                 </button>
@@ -1806,9 +1827,9 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
             </div>
 
             {/* Add New Category */}
-            <div className="space-y-2 pt-2 border-t border-slate-800">
-              <label className="block text-xs font-mono font-bold text-emerald-400 uppercase">
-                + TAMBAH KATEGORI BARU
+            <div className="space-y-2 pt-4 border-t border-slate-800">
+              <label className="block text-slate-300 font-bold uppercase text-xs font-mono tracking-wider">
+                + Tambah Kategori Baru
               </label>
               <div className="flex gap-2">
                 <input
@@ -1816,11 +1837,11 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
                   placeholder="Contoh: Laser Projector, Smart Power, Signage"
                   value={newCatInput}
                   onChange={(e) => setNewCatInput(e.target.value)}
-                  className="flex-1 bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-xl px-4 py-2.5 text-sm text-white font-bold"
+                  className="flex-1 px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 />
                 <button
                   onClick={handleAddCategory}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs cursor-pointer"
+                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs cursor-pointer transition-all active:scale-95 shadow-[0_0_15px_rgba(251,191,36,0.3)]"
                 >
                   Tambah
                 </button>
@@ -1831,9 +1852,9 @@ export default function IpCredentialManager({ onShowToast }: IpCredentialManager
             <div className="pt-4 border-t border-slate-800 flex justify-end">
               <button
                 onClick={() => setIsAddAreaCatModalOpen(false)}
-                className="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold cursor-pointer"
+                className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
               >
-                SELESAI
+                Selesai
               </button>
             </div>
           </div>

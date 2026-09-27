@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Area, Equipment, EquipmentStatus } from '../types';
 import { Plus, Edit2, Trash2, Map, List, Check, Wrench, Minus, Info, CheckCircle, AlertCircle, XCircle, FileText, Download, CheckSquare, Square, Loader2, Sparkles, Printer, Eye, X, CheckCircle2 } from 'lucide-react';
 import Modal from '../components/Modal';
@@ -466,7 +467,7 @@ export default function MasterArea({
   };
 
   return (
-    <div className="space-y-8 animate-slide-in" id="master-area-tab-view">
+    <div className="space-y-8 font-sans" id="master-area-tab-view">
       {/* Intro */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-5 bg-[#0d1322]/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/25 shadow-[0_0_20px_rgba(0,240,255,0.05)]">
         <div>
@@ -727,15 +728,15 @@ export default function MasterArea({
       </div>
 
       {/* --- MODAL AREA ADD/EDIT (RAPOT STUDIO MASTER DESIGN) --- */}
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
+      {isModalOpen && typeof document !== 'undefined' && createPortal(
+        <div 
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
           id="modal-area-overlay"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsModalOpen(false);
           }}
         >
-          <div
+          <div 
             className="bg-slate-900 border border-amber-500/50 rounded-2xl max-w-2xl sm:max-w-3xl w-full p-6 sm:p-8 text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] animate-scale-in my-auto max-h-[92vh] overflow-y-auto"
             id="modal-area-card"
           >
@@ -761,7 +762,7 @@ export default function MasterArea({
                 title="Tutup Dialog"
                 id="btn-close-modal-area"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -824,7 +825,8 @@ export default function MasterArea({
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* --- CONFIRM DIALOG AREA DELETE --- */}
@@ -938,7 +940,7 @@ export default function MasterArea({
                   >
                     <Minus className="h-4 w-4" />
                   </button>
-
+                  
                   <input
                     type="number"
                     min="1"

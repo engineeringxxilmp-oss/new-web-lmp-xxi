@@ -85,30 +85,30 @@ export default function Pengaturan({ onImportSuccess }: PengaturanProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
         
         {/* Database Backup Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs flex flex-col justify-between space-y-6">
+        <div className="bg-[#0d1322]/90 backdrop-blur-md rounded-2xl border border-cyan-500/25 p-6 sm:p-8 shadow-[0_0_20px_rgba(0,240,255,0.05)] flex flex-col justify-between space-y-6">
           <div className="space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-              <div className="p-2.5 bg-blue-100 rounded-xl text-blue-700 border border-blue-200">
+            <div className="flex items-center gap-3 border-b border-cyan-500/20 pb-4">
+              <div className="p-2.5 bg-blue-950/80 rounded-xl text-blue-400 border border-blue-500/30">
                 <Download className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight font-sans">
+                <h3 className="text-lg font-black text-white uppercase tracking-tight font-sans">
                   Backup Database
                 </h3>
-                <span className="text-xs font-mono font-bold text-slate-500">EXPORTS: DATA_BACKUP.JSON</span>
+                <span className="text-xs font-mono font-bold text-cyan-400">EXPORTS: DATA_BACKUP.JSON</span>
               </div>
             </div>
             
-            <p className="text-sm text-slate-800 font-medium leading-relaxed">
-              Unduh salinan arsip cadangan resmi dari database sistem. Seluruh area, equipment, PR engineering, order barang, riwayat pemeliharaan, dan data operasional akan diekspor dalam format file <code className="bg-slate-100 text-slate-900 px-1.5 py-0.5 rounded font-mono font-bold text-xs border border-slate-300">.json</code>.
+            <p className="text-sm text-slate-300 font-medium leading-relaxed">
+              Unduh salinan arsip cadangan resmi dari database sistem. Seluruh area, equipment, PR engineering, order barang, riwayat pemeliharaan, dan data operasional akan diekspor dalam format file <code className="bg-slate-900 text-cyan-300 px-1.5 py-0.5 rounded font-mono font-bold text-xs border border-cyan-500/30">.json</code>.
             </p>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-start gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-800 font-semibold leading-normal">
+            <div className="bg-slate-950/70 p-4 rounded-xl border border-cyan-500/20 flex items-start gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <p className="text-xs text-slate-300 font-semibold leading-normal">
                 Disarankan melakukan backup secara berkala sebelum melakukan perubahan data berskala besar.
               </p>
             </div>
@@ -116,50 +116,50 @@ export default function Pengaturan({ onImportSuccess }: PengaturanProps) {
 
           <button
             onClick={handleDownloadBackup}
-            className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-sm md:text-base py-4 shadow-md transition-all active:scale-[0.99] cursor-pointer"
+            className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black text-sm md:text-base py-3.5 sm:py-4 shadow-[0_0_15px_rgba(0,240,255,0.3)] transition-all active:scale-[0.99] cursor-pointer border border-cyan-400/40"
             id="btn-backup-download"
           >
-            <Download className="w-5 h-5 text-cyan-400" /> Download Backup Database JSON
+            <Download className="w-5 h-5 text-cyan-200" /> Download Backup Database JSON
           </button>
         </div>
 
         {/* Database Restore Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-xs flex flex-col justify-between space-y-6">
+        <div className="bg-[#0d1322]/90 backdrop-blur-md rounded-2xl border border-cyan-500/25 p-6 sm:p-8 shadow-[0_0_20px_rgba(0,240,255,0.05)] flex flex-col justify-between space-y-6">
           <div className="space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-              <div className="p-2.5 bg-emerald-100 rounded-xl text-emerald-700 border border-emerald-200">
+            <div className="flex items-center gap-3 border-b border-cyan-500/20 pb-4">
+              <div className="p-2.5 bg-emerald-950/80 rounded-xl text-emerald-400 border border-emerald-500/30">
                 <RefreshCw className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight font-sans">
+                <h3 className="text-lg font-black text-white uppercase tracking-tight font-sans">
                   Restore Database
                 </h3>
-                <span className="text-xs font-mono font-bold text-slate-500">IMPORTS: DATA_RESTORE.JSON</span>
+                <span className="text-xs font-mono font-bold text-emerald-400">IMPORTS: DATA_RESTORE.JSON</span>
               </div>
             </div>
             
-            <p className="text-sm text-slate-800 font-medium leading-relaxed">
-              Pulihkan database ke kondisi sebelumnya dengan mengunggah file backup <code className="bg-slate-100 text-slate-900 px-1.5 py-0.5 rounded font-mono font-bold text-xs border border-slate-300">.json</code> resmi. Tindakan ini akan <strong className="text-rose-700 font-black">mengganti seluruh database aktif</strong> secara instan.
+            <p className="text-sm text-slate-300 font-medium leading-relaxed">
+              Pulihkan database ke kondisi sebelumnya dengan mengunggah file backup <code className="bg-slate-900 text-emerald-300 px-1.5 py-0.5 rounded font-mono font-bold text-xs border border-emerald-500/30">.json</code> resmi. Tindakan ini akan <strong className="text-rose-400 font-black">mengganti seluruh database aktif</strong> secara instan.
             </p>
 
             {restoreStatus && (
               <div className={`p-4 rounded-xl border text-sm leading-normal font-bold flex items-center gap-2 ${
                 restoreStatus.type === 'success'
-                  ? 'bg-emerald-100 text-emerald-950 border-emerald-300'
-                  : 'bg-rose-100 text-rose-950 border-rose-300'
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                  : 'bg-rose-950/80 text-rose-300 border-rose-500/40'
               }`}>
                 {restoreStatus.type === 'success' ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0" />
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
                 ) : (
-                  <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0" />
+                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
                 )}
                 <span>{restoreStatus.msg}</span>
               </div>
             )}
           </div>
 
-          <label className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white font-black text-sm md:text-base py-4 shadow-md transition-all active:scale-[0.99] cursor-pointer text-center">
-            <Upload className="w-5 h-5 text-white" /> Upload &amp; Restore Database JSON
+          <label className="w-full flex items-center justify-center gap-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-sm md:text-base py-3.5 sm:py-4 shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all active:scale-[0.99] cursor-pointer text-center border border-emerald-400/40">
+            <Upload className="w-5 h-5 text-emerald-200" /> Upload &amp; Restore Database JSON
             <input
               type="file"
               accept=".json"

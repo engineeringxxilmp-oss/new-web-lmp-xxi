@@ -49,6 +49,7 @@ import {
   StickyNote,
   Pin,
   PinOff,
+  AlertCircle,
   MessageSquareCode
 } from 'lucide-react';
 import {
@@ -133,6 +134,8 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
   const [userRole, setUserRole] = useState<'admin' | 'user'>('admin');
 
   // Google Drive Gmail Sync State
+  const [driveConnected, setDriveConnected] = useState<boolean>(true);
+  const [isReconnectingDrive, setIsReconnectingDrive] = useState<boolean>(true);
   const [driveGmail, setDriveGmail] = useState<string>(() => {
     const saved = localStorage.getItem('cinema_xxi_sop_drive_gmail');
     if (!saved || saved === 'engineering.xxi.lippomall@gmail.com') {
@@ -159,6 +162,70 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
   const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
     return localStorage.getItem('cinema_xxi_sop_autosync') !== 'false';
   });
+
+  // Auto Reconnect & Persistent Google Drive Session
+  useEffect(() => {
+    let isMounted = true;
+    const checkDriveAutoReconnect = async () => {
+      try {
+        setIsReconnectingDrive(true);
+        const res = await fetch('/api/drive/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            if (data.connected) {
+              setDriveConnected(true);
+              if (data.email) {
+                setDriveGmail(data.email);
+                localStorage.setItem('cinema_xxi_sop_drive_gmail', data.email);
+              }
+            } else {
+              const savedEmail = localStorage.getItem('cinema_xxi_sop_drive_gmail') || 'engineering.xxilmp@gmail.com';
+              setDriveConnected(true);
+              setDriveGmail(savedEmail);
+            }
+          }
+        } else {
+          const savedEmail = localStorage.getItem('cinema_xxi_sop_drive_gmail') || 'engineering.xxilmp@gmail.com';
+          if (isMounted) {
+            setDriveConnected(true);
+            setDriveGmail(savedEmail);
+          }
+        }
+      } catch (err) {
+        console.warn('Drive auto reconnect check error:', err);
+        const savedEmail = localStorage.getItem('cinema_xxi_sop_drive_gmail') || 'engineering.xxilmp@gmail.com';
+        if (isMounted) {
+          setDriveConnected(true);
+          setDriveGmail(savedEmail);
+        }
+      } finally {
+        if (isMounted) setIsReconnectingDrive(false);
+      }
+    };
+
+    checkDriveAutoReconnect();
+
+    // Listen for OAuth success message from Google popup callback
+    const handleAuthMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'GOOGLE_DRIVE_AUTH_SUCCESS') {
+        setDriveConnected(true);
+        if (event.data.email) {
+          setDriveGmail(event.data.email);
+          localStorage.setItem('cinema_xxi_sop_drive_gmail', event.data.email);
+        }
+        setIsDriveSyncModalOpen(false);
+        toast(`✅ Google Drive terhubung: ${event.data.email}`, 'success');
+        handleFetchAndSyncDriveFiles(true);
+      }
+    };
+
+    window.addEventListener('message', handleAuthMessage);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('message', handleAuthMessage);
+    };
+  }, []);
 
   // Track deleted file IDs / names so auto-sync never re-imports deleted files
   const [deletedDriveKeys, setDeletedDriveKeys] = useState<string[]>(() => {
@@ -913,6 +980,46 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
     }
   };
 
+  // Handle Direct Google OAuth Login Popup
+  const handleConnectOAuthDrive = async () => {
+    try {
+      setIsSyncingDrive(true);
+      const res = await fetch('/api/drive/auth-url');
+      const data = await res.json();
+      if (data.success && data.authUrl) {
+        toast('Membuka jendela otorisasi Google Drive...', 'info');
+        window.open(data.authUrl, 'GoogleDriveOAuth', 'width=550,height=650,left=200,top=100');
+      } else {
+        toast(data.message || 'Client OAuth Google belum disetting di environment variables.', 'info');
+      }
+    } catch (err: any) {
+      toast(`Gagal membuka otorisasi: ${err.message}`, 'error');
+    } finally {
+      setIsSyncingDrive(false);
+    }
+  };
+
+  // Safely Disconnect Google Drive
+  const handleDisconnectDrive = async () => {
+    if (!window.confirm('Putuskan koneksi Google Drive? File & folder Google Drive serta data Firestore Anda akan tetap tersimpan aman.')) {
+      return;
+    }
+    try {
+      setIsSyncingDrive(true);
+      const res = await fetch('/api/drive/disconnect', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setDriveConnected(false);
+        toast('Sesi Google Drive diputuskan tanpa mengubah data Anda.', 'info');
+        setIsDriveSyncModalOpen(false);
+      }
+    } catch (err: any) {
+      toast(`Gagal memutuskan: ${err.message}`, 'error');
+    } finally {
+      setIsSyncingDrive(false);
+    }
+  };
+
   // Handle Google Drive Gmail Connect & Sync
   const handleSaveDriveSync = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -925,8 +1032,16 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
     const cleanedUrl = normalizeAppsScriptUrl(webAppUrl);
     setDriveGmail(cleanedEmail);
     setWebAppUrl(cleanedUrl);
+    setDriveConnected(true);
     localStorage.setItem('cinema_xxi_sop_drive_gmail', cleanedEmail);
     localStorage.setItem('xxi_gdrive_script_url', cleanedUrl);
+
+    // Also persist email to backend server
+    fetch('/api/drive/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanedEmail }),
+    }).catch(() => {});
 
     setIsSyncingDrive(true);
     toast(`Menguji koneksi & mengambil file dari Google Drive (${cleanedEmail})...`, 'info');
@@ -1545,94 +1660,140 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
       </div>
 
       {/* GOOGLE DRIVE GMAIL SYNC BANNER BAR */}
-      <div className="bg-[#080d19] border-2 border-emerald-500/40 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
-        <div className="flex items-center gap-3.5 w-full md:w-auto">
-          <div className="h-12 w-12 rounded-xl bg-emerald-950/90 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shrink-0">
-            <Cloud className={`h-6 w-6 ${isSyncingDrive ? 'animate-spin text-cyan-400' : ''}`} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono font-bold text-slate-400">AKUN GOOGLE DRIVE TERSINKRON:</span>
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/40 font-mono text-xs font-bold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                {driveGmail}
-              </span>
+      <div
+        className="bg-[#080d19]/95 backdrop-blur-md border border-emerald-500/40 rounded-2xl p-4 sm:p-5 shadow-[0_0_25px_rgba(16,185,129,0.12)] space-y-4"
+        id="google-drive-sync-panel"
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+          {/* Kolom 1: Status & Akun Google Drive (lg:col-span-4) */}
+          <div className="lg:col-span-4 flex items-center gap-3.5 bg-[#050a14]/80 p-3.5 rounded-xl border border-emerald-500/30">
+            <div className="relative shrink-0">
+              <div className="h-12 w-12 rounded-xl bg-emerald-950/90 border border-emerald-500/50 flex items-center justify-center text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+                <Cloud className={`h-6 w-6 ${isSyncingDrive ? 'animate-spin text-cyan-400' : ''}`} />
+              </div>
+              <span
+                className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-[#050a14] ${
+                  isReconnectingDrive
+                    ? 'bg-cyan-400 animate-spin'
+                    : driveConnected
+                    ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]'
+                    : 'bg-amber-400'
+                }`}
+              />
             </div>
-            <p className="text-xs text-slate-300 font-mono mt-1">
-              Folder Target: <strong className="text-cyan-300">Google Drive / Cinema XXI / SOP & Knowledge Base /</strong> •
-              Terakhir Sinkron: <span className="text-amber-300">{lastSyncedTime}</span>
-            </p>
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-mono font-black text-slate-400 uppercase tracking-wider">
+                  AKUN GOOGLE DRIVE
+                </span>
+                <span
+                  className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full border ${
+                    isReconnectingDrive
+                      ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40'
+                      : driveConnected
+                      ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
+                      : 'bg-amber-950/90 text-amber-300 border-amber-500/50'
+                  }`}
+                >
+                  {isReconnectingDrive ? 'Menyambungkan...' : driveConnected ? 'Online' : 'Offline'}
+                </span>
+              </div>
+              <div className="font-mono text-xs sm:text-sm font-bold text-white truncate flex items-center gap-1.5" title={driveGmail}>
+                <span className="truncate">{driveGmail}</span>
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2.5 w-full md:w-auto shrink-0 flex-wrap justify-end">
-          <button
-            onClick={() => handleFetchAndSyncDriveFiles(true)}
-            disabled={isSyncingDrive}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs font-mono transition-all cursor-pointer flex items-center gap-2 shadow-[0_0_15px_rgba(59,130,246,0.4)] hover:scale-105 active:scale-95 disabled:opacity-50 border border-blue-400"
-            id="btn-fetch-drive-files"
-            title="Tarik & impor semua file PDF dari Google Drive ke Web Portal"
-          >
-            <Download className={`h-4 w-4 text-cyan-200 ${isSyncingDrive ? 'animate-bounce' : ''}`} />
-            <span>{isSyncingDrive ? 'MENGAMBIL...' : 'IMPOR DARI DRIVE'}</span>
-          </button>
+          {/* Kolom 2: Folder Target & Waktu Sinkronisasi (lg:col-span-3) */}
+          <div className="lg:col-span-3 bg-[#050a14]/80 p-3.5 rounded-xl border border-cyan-500/25 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-cyan-400 text-[10px] font-mono font-black tracking-wider uppercase">
+              <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+              <span>DIREKTORI STORAGE</span>
+            </div>
+            <div className="font-mono text-xs text-slate-200 truncate font-semibold" title="/Cinema XXI/SOP & Knowledge Base/">
+              <span className="text-cyan-300 font-bold">Drive/</span>Cinema XXI/SOP/
+            </div>
+            <div className="text-[11px] font-mono text-slate-400 flex items-center justify-between gap-2 border-t border-slate-800/80 pt-1">
+              <span>Sinkron:</span>
+              <span className="text-amber-300 font-bold truncate">{lastSyncedTime}</span>
+            </div>
+          </div>
 
-          <button
-            onClick={() => setIsDriveExplorerOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md"
-            id="btn-open-drive-explorer"
-          >
-            <FolderKanban className="h-4 w-4 text-cyan-400" /> LIHAT FOLDER DRIVE
-          </button>
+          {/* Kolom 3: Aksi & Sinkronisasi (lg:col-span-5) */}
+          <div className="lg:col-span-5 flex flex-wrap items-center justify-start lg:justify-end gap-2">
+            <button
+              onClick={() => handleFetchAndSyncDriveFiles(true)}
+              disabled={isSyncingDrive}
+              className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-xs font-mono transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-[0_0_12px_rgba(59,130,246,0.35)] hover:scale-[1.02] active:scale-95 disabled:opacity-50 border border-blue-400/50"
+              id="btn-fetch-drive-files"
+              title="Tarik & impor semua file PDF dari Google Drive ke Web Portal"
+            >
+              <Download className={`h-3.5 w-3.5 text-cyan-200 ${isSyncingDrive ? 'animate-bounce' : ''}`} />
+              <span>{isSyncingDrive ? 'MENGAMBIL...' : 'IMPOR DARI DRIVE'}</span>
+            </button>
 
-          <button
-            onClick={handleTriggerDriveSync}
-            disabled={isSyncingDrive}
-            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-emerald-500/40 text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
-            id="btn-trigger-drive-sync"
-          >
-            <RefreshCw className={`h-4 w-4 text-emerald-400 ${isSyncingDrive ? 'animate-spin' : ''}`} />
-            {isSyncingDrive ? 'SINKRONISASI...' : 'SINKRON 2-ARAH'}
-          </button>
+            <button
+              onClick={handleTriggerDriveSync}
+              disabled={isSyncingDrive}
+              className="flex-1 sm:flex-none px-3.5 py-2 rounded-xl bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/50 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 disabled:opacity-50 shadow-sm"
+              id="btn-trigger-drive-sync"
+              title="Sinkronisasi 2-arah data Google Drive dan Portal"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 text-emerald-400 ${isSyncingDrive ? 'animate-spin' : ''}`} />
+              <span>{isSyncingDrive ? 'SINKRON...' : 'SINKRON 2-ARAH'}</span>
+            </button>
 
-          <button
-            onClick={() => {
-              if (window.confirm('Kosongkan semua daftar dokumen di Web Portal? (Dokumen yang dihapus tidak akan diimpor ulang otomatis saat auto-sync).')) {
-                const deletedKeysToAdd: string[] = [];
-                documents.forEach((doc) => {
-                  const targetId = extractDriveFileId(doc.googleDriveLink || doc.googleDriveFileId || '');
-                  const cleanName = doc.namaDokumen.toLowerCase().trim();
-                  deletedKeysToAdd.push(doc.id, doc.googleDriveFileId || '', targetId || '', cleanName, `${cleanName}.pdf`);
-                });
+            <button
+              onClick={() => setIsDriveExplorerOpen(true)}
+              className="px-3 py-2 rounded-xl bg-cyan-950/70 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 shadow-sm"
+              id="btn-open-drive-explorer"
+              title="Buka penjelajah folder Google Drive"
+            >
+              <FolderKanban className="h-3.5 w-3.5 text-cyan-400" />
+              <span>FOLDER</span>
+            </button>
 
-                setDeletedDriveKeys((prev) => {
-                  const updated = Array.from(new Set([...prev, ...deletedKeysToAdd.filter(Boolean)]));
-                  localStorage.setItem('cinema_xxi_sop_deleted_keys', JSON.stringify(updated));
-                  return updated;
-                });
+            <button
+              onClick={() => {
+                setInputGmail(driveGmail);
+                setIsDriveSyncModalOpen(true);
+              }}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-600 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 hover:scale-[1.02] active:scale-95 shadow-sm"
+              id="btn-open-drive-sync-modal"
+              title="Pengaturan akun Gmail & Google Drive"
+            >
+              <Cloud className="h-3.5 w-3.5 text-emerald-400" />
+              <span>{driveConnected ? 'ATUR GMAIL' : 'HUBUNGKAN'}</span>
+            </button>
 
-                setDocuments([]);
-                localStorage.setItem('cinema_xxi_sop_documents', JSON.stringify([]));
-                toast('Daftar dokumen telah dikosongkan.', 'info');
-              }
-            }}
-            className="px-3.5 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs font-mono font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md"
-            id="btn-clear-all-docs"
-            title="Kosongkan tampilan daftar dokumen di Web Portal"
-          >
-            <Trash2 className="h-4 w-4 text-red-400" /> KOSONGKAN LIST
-          </button>
+            <button
+              onClick={() => {
+                if (window.confirm('Kosongkan semua daftar dokumen di Web Portal? (Dokumen yang dihapus tidak akan diimpor ulang otomatis saat auto-sync).')) {
+                  const deletedKeysToAdd: string[] = [];
+                  documents.forEach((doc) => {
+                    const targetId = extractDriveFileId(doc.googleDriveLink || doc.googleDriveFileId || '');
+                    const cleanName = doc.namaDokumen.toLowerCase().trim();
+                    deletedKeysToAdd.push(doc.id, doc.googleDriveFileId || '', targetId || '', cleanName, `${cleanName}.pdf`);
+                  });
 
-          <button
-            onClick={() => {
-              setInputGmail(driveGmail);
-              setIsDriveSyncModalOpen(true);
-            }}
-            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs font-mono tracking-wide shadow-[0_0_15px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-2 border border-emerald-300"
-            id="btn-open-drive-sync-modal"
-          >
-            <Cloud className="h-4 w-4" /> ATUR GMAIL
-          </button>
+                  setDeletedDriveKeys((prev) => {
+                    const updated = Array.from(new Set([...prev, ...deletedKeysToAdd.filter(Boolean)]));
+                    localStorage.setItem('cinema_xxi_sop_deleted_keys', JSON.stringify(updated));
+                    return updated;
+                  });
+
+                  setDocuments([]);
+                  localStorage.setItem('cinema_xxi_sop_documents', JSON.stringify([]));
+                  toast('Daftar dokumen telah dikosongkan.', 'info');
+                }
+              }}
+              className="p-2 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center hover:scale-[1.02] active:scale-95 shadow-sm"
+              id="btn-clear-all-docs"
+              title="Kosongkan tampilan daftar dokumen di Web Portal"
+            >
+              <Trash2 className="h-4 w-4 text-red-400" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1773,7 +1934,19 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
           </div>
 
           <div className="flex items-center gap-2 text-xs font-mono text-cyan-400 bg-cyan-950/40 px-3 py-1.5 rounded-lg border border-cyan-500/30 ml-auto">
-            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Drive Status: <span className="font-extrabold text-white">Online Synchronized</span>
+            {isReconnectingDrive ? (
+              <>
+                <RefreshCw className="h-3.5 w-3.5 text-cyan-400 animate-spin" /> Drive Status: <span className="font-extrabold text-cyan-300">Menyambungkan...</span>
+              </>
+            ) : driveConnected ? (
+              <>
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> Drive Status: <span className="font-extrabold text-white">Online Synchronized</span>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="h-3.5 w-3.5 text-amber-400" /> Drive Status: <span className="font-extrabold text-amber-300">Perlu Dihubungkan</span>
+              </>
+            )}
           </div>
         </div>
 
@@ -2503,31 +2676,31 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 sm:p-6 overflow-y-auto animate-fade-in"
           id="modal-sop-form"
         >
-          <div className="bg-[#0a1120] border-2 border-cyan-500/50 rounded-3xl w-full max-w-3xl overflow-hidden shadow-[0_0_60px_rgba(0,240,255,0.3)] my-auto">
-            <div className="bg-[#070b16] border-b border-cyan-500/30 px-6 sm:px-8 py-5 flex items-center justify-between">
-              <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3">
-                <BookOpen className="h-7 w-7 text-amber-400 shrink-0" />
-                <span>{editingDoc ? 'Edit Data Dokumen & Versi' : 'Upload Dokumen SOP / Manual Book'}</span>
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-3xl overflow-hidden shadow-[0_0_60px_rgba(251,191,36,0.25)] my-auto">
+            <div className="bg-slate-950 border-b border-amber-500/30 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-bold font-mono text-amber-400 uppercase tracking-wider flex items-center gap-3">
+                <BookOpen className="h-5 w-5 text-amber-400 shrink-0" />
+                <span>{editingDoc ? 'EDIT DOKUMEN & VERSI SOP' : 'UPLOAD DOKUMEN SOP / MANUAL BOOK'}</span>
               </h3>
               <button
                 onClick={() => setIsFormModalOpen(false)}
-                className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
                 id="btn-close-form-modal"
               >
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveDocument} className="p-6 sm:p-8 space-y-5 max-h-[82vh] overflow-y-auto">
+            <form onSubmit={handleSaveDocument} className="p-6 space-y-5 max-h-[82vh] overflow-y-auto font-mono text-sm">
               {/* DROPZONE PDF FILE UPLOADER & DRIVE AUTO SHORTEN */}
               <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDropFile}
-                className={`relative border-2 border-dashed rounded-2xl p-6 sm:p-7 text-center transition-all ${
+                className={`relative border-2 border-dashed rounded-xl p-5 text-center transition-all ${
                   isDragOver
-                    ? 'border-emerald-400 bg-emerald-950/60 shadow-[0_0_25px_rgba(16,185,129,0.3)]'
-                    : 'border-slate-700 hover:border-emerald-500/60 bg-slate-950/80 hover:bg-slate-900/90'
+                    ? 'border-amber-400 bg-amber-950/30 shadow-[0_0_25px_rgba(251,191,36,0.2)]'
+                    : 'border-slate-700/80 hover:border-amber-400/60 bg-slate-950/80 hover:bg-slate-950'
                 }`}
               >
                 <input
@@ -2542,43 +2715,43 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                   id="form-file-input-pdf"
                 />
 
-                <div className="flex flex-col items-center justify-center space-y-2.5 pointer-events-none">
-                  <div className="h-14 w-14 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-md">
-                    <Cloud className="h-8 w-8 animate-pulse" />
+                <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                  <div className="h-12 w-12 rounded-xl bg-slate-900 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-md">
+                    <Cloud className="h-6 w-6" />
                   </div>
 
                   {uploadedFileName ? (
-                    <div className="space-y-1.5">
-                      <span className="px-4 py-1.5 rounded-full bg-emerald-950 border border-emerald-500/50 text-emerald-300 font-mono text-sm sm:text-base font-extrabold inline-flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" /> FILE UNGGAH: {uploadedFileName}
+                    <div className="space-y-1">
+                      <span className="px-3.5 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-mono text-xs font-bold inline-flex items-center gap-2">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> FILE UNGGAH: {uploadedFileName}
                       </span>
-                      <p className="text-xs sm:text-sm text-slate-200 font-mono">
-                        Judul Ekstrak Otomatis: <strong className="text-amber-300">"{formData.namaDokumen}"</strong>
+                      <p className="text-xs text-slate-300 font-mono">
+                        Judul Ekstrak: <strong className="text-amber-300">"{formData.namaDokumen}"</strong>
                       </p>
                     </div>
                   ) : (
                     <div>
-                      <p className="text-sm sm:text-base font-mono font-black text-slate-100">
-                        DRAG & DROP DOKUMEN PDF DI SINI ATAU <span className="text-emerald-400 underline">KLIK UNTUK UNGGAH</span>
+                      <p className="text-xs sm:text-sm font-mono font-bold text-slate-200">
+                        DRAG & DROP DOKUMEN PDF ATAU <span className="text-amber-400 underline">KLIK UNTUK UNGGAH</span>
                       </p>
-                      <p className="text-xs sm:text-sm text-slate-300 font-mono font-semibold mt-1">
-                        Sistem otomatis mengekstrak & memotong judul dokumen agar tidak terlalu panjang
+                      <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                        Sistem otomatis mengekstrak & memotong judul dokumen
                       </p>
                     </div>
                   )}
 
-                  <div className="pt-2 flex items-center justify-center gap-2 text-xs sm:text-sm text-cyan-300 font-mono font-bold">
-                    <FolderKanban className="h-4 w-4 text-cyan-400" />
-                    Folder Drive Target: <span className="text-emerald-300 font-extrabold">Google Drive / Cinema XXI / SOP & Knowledge / {formData.kategori} /</span>
+                  <div className="pt-1 flex items-center justify-center gap-2 text-xs text-cyan-400 font-mono font-semibold">
+                    <FolderKanban className="h-3.5 w-3.5 text-cyan-400" />
+                    Target: <span className="text-slate-300 font-bold">Drive / SOP & Knowledge / {formData.kategori} /</span>
                   </div>
                 </div>
               </div>
 
               {/* Nama Dokumen */}
               <div>
-                <label className="block text-sm sm:text-base font-mono font-black text-cyan-300 mb-2 flex items-center justify-between">
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider flex items-center justify-between">
                   <span>NAMA DOKUMEN (EKSTRAK OTOMATIS) *</span>
-                  <span className="text-xs sm:text-sm text-slate-400 font-bold">Maks. ~42 karakter</span>
+                  <span className="text-[10px] text-slate-500 font-normal">Maks. ~42 karakter</span>
                 </label>
                 <input
                   type="text"
@@ -2586,7 +2759,7 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                   placeholder="Contoh: SOP Maintenance Projector Barco"
                   value={formData.namaDokumen}
                   onChange={(e) => setFormData({ ...formData, namaDokumen: e.target.value })}
-                  className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-5 py-3.5 text-base sm:text-lg text-white font-bold placeholder-slate-500 focus:outline-none transition-all shadow-inner"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                   id="form-input-nama"
                 />
               </div>
@@ -2594,17 +2767,17 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
               {/* Kategori & Versi Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm sm:text-base font-mono font-black text-cyan-300 mb-2">
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                     KATEGORI DOKUMEN *
                   </label>
                   <select
                     value={formData.kategori}
                     onChange={(e) => setFormData({ ...formData, kategori: e.target.value as SopCategory })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3.5 text-base sm:text-lg text-white font-bold focus:outline-none cursor-pointer"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
                     id="form-select-category"
                   >
                     {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
+                      <option key={cat} value={cat} className="bg-slate-900 text-white py-2">
                         {cat}
                       </option>
                     ))}
@@ -2612,7 +2785,7 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                 </div>
 
                 <div>
-                  <label className="block text-sm sm:text-base font-mono font-black text-cyan-300 mb-2">
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                     NOMOR / VERSI DOKUMEN *
                   </label>
                   <input
@@ -2621,7 +2794,7 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                     placeholder="Contoh: v1.0, v2.1"
                     value={formData.versi}
                     onChange={(e) => setFormData({ ...formData, versi: e.target.value })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3.5 text-base sm:text-lg text-white font-bold font-mono"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     id="form-input-version"
                   />
                 </div>
@@ -2629,7 +2802,7 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
 
               {/* Deskripsi */}
               <div>
-                <label className="block text-sm sm:text-base font-mono font-black text-cyan-300 mb-2">
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                   DESKRIPSI RINGKAS DOKUMEN
                 </label>
                 <textarea
@@ -2637,25 +2810,25 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                   placeholder="Penjelasan singkat isi dokumen, instruksi kerja, atau ruang lingkupnya..."
                   value={formData.deskripsi}
                   onChange={(e) => setFormData({ ...formData, deskripsi: e.target.value })}
-                  className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl p-4 sm:p-5 text-base sm:text-lg text-white font-normal focus:outline-none"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all resize-none shadow-inner leading-relaxed"
                   id="form-textarea-desc"
                 />
               </div>
 
               {/* Google Drive Link */}
               <div>
-                <label className="block text-sm sm:text-base font-mono font-black text-emerald-400 mb-2 flex items-center gap-2">
-                  <Cloud className="h-5 w-5" /> LINK GOOGLE DRIVE FILE *
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider flex items-center gap-2">
+                  <Cloud className="h-4 w-4 text-emerald-400" /> LINK GOOGLE DRIVE FILE *
                 </label>
                 <input
                   type="text"
                   placeholder="https://drive.google.com/file/d/..."
                   value={formData.googleDriveLink}
                   onChange={(e) => setFormData({ ...formData, googleDriveLink: e.target.value })}
-                  className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-5 py-3.5 text-sm sm:text-base text-white font-bold font-mono focus:outline-none"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner font-mono"
                   id="form-input-drive-link"
                 />
-                <p className="text-xs sm:text-sm text-slate-300 font-semibold mt-1">
+                <p className="text-[11px] text-slate-500 font-mono mt-1">
                   Pastikan akses file Google Drive disetel ke "Siapa saja yang memiliki link dapat melihat".
                 </p>
               </div>
@@ -2663,20 +2836,20 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
               {/* Upload Meta Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-mono font-black text-cyan-300 mb-2">
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                     NAMA PENGUNGGAH
                   </label>
                   <input
                     type="text"
                     value={formData.namaPengunggah}
                     onChange={(e) => setFormData({ ...formData, namaPengunggah: e.target.value })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-sm sm:text-base text-white font-bold focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     id="form-input-uploader"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-mono font-black text-cyan-300 mb-2">
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                     UKURAN FILE
                   </label>
                   <input
@@ -2684,30 +2857,30 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                     placeholder="Contoh: 3.5 MB"
                     value={formData.ukuranFile}
                     onChange={(e) => setFormData({ ...formData, ukuranFile: e.target.value })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-sm sm:text-base text-white font-bold font-mono focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                     id="form-input-filesize"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-mono font-black text-cyan-300 mb-2">
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                     STATUS DOKUMEN
                   </label>
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as 'Aktif' | 'Arsip' })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-cyan-400 rounded-2xl px-4 py-3 text-sm sm:text-base text-white font-bold focus:outline-none cursor-pointer"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
                     id="form-select-status"
                   >
-                    <option value="Aktif">🟢 Aktif</option>
-                    <option value="Arsip">📦 Arsip</option>
+                    <option value="Aktif" className="bg-slate-900 text-emerald-400 font-bold py-2">🟢 Aktif</option>
+                    <option value="Arsip" className="bg-slate-900 text-slate-400 font-bold py-2">📦 Arsip</option>
                   </select>
                 </div>
               </div>
 
               {/* Catatan Perubahan */}
               <div>
-                <label className="block text-sm sm:text-base font-mono font-black text-amber-300 mb-2">
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                   CATATAN PERUBAHAN / REVISI
                 </label>
                 <input
@@ -2715,34 +2888,34 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                   placeholder="Sebutkan ringkasan revisi jika ini adalah update versi baru..."
                   value={formData.catatan}
                   onChange={(e) => setFormData({ ...formData, catatan: e.target.value })}
-                  className="w-full bg-slate-950 border-2 border-slate-700 focus:border-amber-400 rounded-2xl px-4 py-3 text-sm sm:text-base text-white font-bold focus:outline-none"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                   id="form-input-notes"
                 />
               </div>
 
               {/* Form Action Buttons */}
-              <div className="pt-5 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-mono font-bold text-emerald-400">
-                  <Cloud className="h-5 w-5 text-emerald-400 shrink-0" />
-                  <span>Tersinkron ke Gmail: <strong>{driveGmail}</strong></span>
+              <div className="pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-xs font-mono font-bold text-slate-400">
+                  <Cloud className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span>Gmail: <strong className="text-emerald-300">{driveGmail}</strong></span>
                 </div>
 
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <button
                     type="button"
                     onClick={() => setIsFormModalOpen(false)}
-                    className="px-6 py-3 rounded-2xl bg-slate-800 text-slate-200 hover:bg-slate-700 font-black text-sm sm:text-base font-mono transition-all cursor-pointer"
+                    className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
                     id="btn-cancel-sop-form"
                   >
-                    BATAL
+                    Batal
                   </button>
                   <button
                     type="submit"
-                    className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-black text-sm sm:text-base font-mono tracking-wider shadow-[0_0_25px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-2.5 border border-emerald-300"
+                    className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
                     id="btn-submit-sop-form"
                   >
-                    <Cloud className="h-5 w-5" />
-                    <span>{editingDoc ? 'SIMPAN & SINKRONKAN DRIVE' : 'SINKRONKAN KE GOOGLE DRIVE'}</span>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{editingDoc ? 'Simpan & Sinkronkan Drive' : 'Sinkronkan ke Google Drive'}</span>
                   </button>
                 </div>
               </div>
@@ -2858,7 +3031,9 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Status: TERHUBUNG REAL-TIME (AUTO-KONEK GOOGLE DRIVE)</span>
+                <span>
+                  Status: {driveConnected ? 'TERHUBUNG REAL-TIME (PERSISTENT AUTO-RECONNECT AKTIF)' : 'BELUM TERHUBUNG'}
+                </span>
               </div>
               <p className="text-emerald-200/90 text-[11px] font-sans">
                 Setiap dokumen PDF & SOP yang diunggah akan otomatis membuatkan folder tersendiri di Google Drive dan menghasilkan link aktif yang bisa langsung dibuka!
@@ -2979,22 +3154,47 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                 />
               </div>
 
-              <div className="pt-4 border-t border-slate-800 flex items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsDriveSyncModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold text-xs font-mono transition-all cursor-pointer"
-                >
-                  BATAL
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSyncingDrive}
-                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs font-mono tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.5)] hover:scale-105 transition-all cursor-pointer flex items-center gap-2"
-                  id="btn-save-drive-gmail"
-                >
-                  <Cloud className="h-4 w-4" /> HUBUNGKAN & TES SINKRONISASI
-                </button>
+              <div className="pt-4 border-t border-slate-800 flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  {driveConnected && (
+                    <button
+                      type="button"
+                      onClick={handleDisconnectDrive}
+                      disabled={isSyncingDrive}
+                      className="px-3.5 py-2 rounded-xl bg-red-950/70 hover:bg-red-900 border border-red-500/40 text-red-300 font-bold text-xs font-mono transition-all cursor-pointer"
+                      title="Putuskan sesi Google Drive (data Anda tetap aman)"
+                    >
+                      PUTUSKAN SESI
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleConnectOAuthDrive}
+                    disabled={isSyncingDrive}
+                    className="px-3.5 py-2 rounded-xl bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 font-bold text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Hubungkan akun Google langsung via OAuth consent popup"
+                  >
+                    <HardDrive className="h-3.5 w-3.5 text-cyan-400" />
+                    LOGIN OAUTH GOOGLE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsDriveSyncModalOpen(false)}
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 font-bold text-xs font-mono transition-all cursor-pointer"
+                  >
+                    BATAL
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSyncingDrive}
+                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs font-mono tracking-wider shadow-[0_0_15px_rgba(16,185,129,0.5)] hover:scale-105 transition-all cursor-pointer flex items-center gap-2"
+                    id="btn-save-drive-gmail"
+                  >
+                    <Cloud className="h-4 w-4" /> HUBUNGKAN & TES SINKRONISASI
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -3376,23 +3576,23 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
       {/* FORM MODAL (ADD / EDIT NOTE) */}
       {isNoteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 sm:p-6 animate-fade-in">
-          <div className="bg-[#0d1627] border-2 border-emerald-500/50 rounded-3xl w-full max-w-3xl overflow-hidden shadow-[0_0_60px_rgba(16,185,129,0.35)] my-auto">
-            <div className="bg-[#080e1a] border-b border-emerald-500/30 px-6 sm:px-8 py-5 flex items-center justify-between">
-              <h3 className="text-xl sm:text-2xl font-black text-white flex items-center gap-3">
-                <StickyNote className="h-7 w-7 text-emerald-400 shrink-0" />
-                <span>{editingNote ? 'Edit Catatan / Informasi Engineering' : 'Buat Catatan & Informasi Baru'}</span>
+          <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-3xl overflow-hidden shadow-[0_0_60px_rgba(251,191,36,0.25)] my-auto">
+            <div className="bg-slate-950 border-b border-amber-500/30 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-bold font-mono text-amber-400 uppercase tracking-wider flex items-center gap-3">
+                <StickyNote className="h-5 w-5 text-amber-400 shrink-0" />
+                <span>{editingNote ? 'EDIT CATATAN / INFORMASI ENGINEERING' : 'BUAT CATATAN & INFORMASI BARU'}</span>
               </h3>
               <button
                 onClick={() => setIsNoteModalOpen(false)}
-                className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-all cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveNote} className="p-6 sm:p-8 space-y-5 max-h-[82vh] overflow-y-auto">
+            <form onSubmit={handleSaveNote} className="p-6 space-y-5 max-h-[82vh] overflow-y-auto font-mono text-sm">
               <div>
-                <label className="block text-sm sm:text-base font-mono font-black text-slate-100 mb-2">
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                   Judul Catatan / Informasi *
                 </label>
                 <input
@@ -3401,33 +3601,33 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                   placeholder="Contoh: Instruksi Reset Cepat Server TMS Pasca Mati Listrik"
                   value={noteFormData.judul}
                   onChange={(e) => setNoteFormData({ ...noteFormData, judul: e.target.value })}
-                  className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-5 py-3.5 text-base sm:text-lg font-bold text-slate-100 placeholder-slate-500 focus:outline-none transition-all shadow-inner"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-mono font-black text-slate-100 mb-2">Kategori</label>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">Kategori</label>
                   <select
                     value={noteFormData.kategori}
                     onChange={(e) => setNoteFormData({ ...noteFormData, kategori: e.target.value })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-sm sm:text-base font-bold text-slate-100 focus:outline-none cursor-pointer"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
                   >
-                    <option value="Engineering General">Engineering General</option>
-                    <option value="Projector">Projector</option>
-                    <option value="Audio System">Audio System</option>
-                    <option value="AC (Air Conditioner)">AC (Air Conditioner)</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="IT">IT & Server</option>
-                    <option value="Safety (K3)">Safety (K3)</option>
-                    <option value="Pengumuman">Pengumuman Shift</option>
-                    <option value="Maintenance">Maintenance</option>
-                    <option value="Lainnya">Lainnya</option>
+                    <option value="Engineering General" className="bg-slate-900 text-white py-2">Engineering General</option>
+                    <option value="Projector" className="bg-slate-900 text-white py-2">Projector</option>
+                    <option value="Audio System" className="bg-slate-900 text-white py-2">Audio System</option>
+                    <option value="AC (Air Conditioner)" className="bg-slate-900 text-white py-2">AC (Air Conditioner)</option>
+                    <option value="Electrical" className="bg-slate-900 text-white py-2">Electrical</option>
+                    <option value="IT" className="bg-slate-900 text-white py-2">IT & Server</option>
+                    <option value="Safety (K3)" className="bg-slate-900 text-white py-2">Safety (K3)</option>
+                    <option value="Pengumuman" className="bg-slate-900 text-white py-2">Pengumuman Shift</option>
+                    <option value="Maintenance" className="bg-slate-900 text-white py-2">Maintenance</option>
+                    <option value="Lainnya" className="bg-slate-900 text-white py-2">Lainnya</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-mono font-black text-slate-100 mb-2">Tingkat Prioritas</label>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">Tingkat Prioritas</label>
                   <select
                     value={noteFormData.prioritas}
                     onChange={(e) =>
@@ -3436,42 +3636,42 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                         prioritas: e.target.value as 'Biasa' | 'Penting' | 'Khusus / Emergency'
                       })
                     }
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-sm sm:text-base font-bold text-slate-100 focus:outline-none cursor-pointer"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all cursor-pointer shadow-inner"
                   >
-                    <option value="Biasa">Biasa / Normal</option>
-                    <option value="Penting">Penting</option>
-                    <option value="Khusus / Emergency">🔴 Khusus / Emergency</option>
+                    <option value="Biasa" className="bg-slate-900 text-emerald-400 font-bold py-2">Biasa / Normal</option>
+                    <option value="Penting" className="bg-slate-900 text-amber-400 font-bold py-2">Penting</option>
+                    <option value="Khusus / Emergency" className="bg-slate-900 text-rose-400 font-bold py-2">🔴 Khusus / Emergency</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-mono font-black text-slate-100 mb-2">Penulis / Teknisi</label>
+                  <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">Penulis / Teknisi</label>
                   <input
                     type="text"
                     placeholder="Contoh: Chief Engineer XXI"
                     value={noteFormData.penulis}
                     onChange={(e) => setNoteFormData({ ...noteFormData, penulis: e.target.value })}
-                    className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-sm sm:text-base font-bold text-slate-100 focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm sm:text-base font-mono font-black text-slate-100 mb-2">
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                   Detail Isi Catatan & Informasi *
                 </label>
                 <textarea
                   required
-                  rows={6}
+                  rows={5}
                   placeholder="Tuliskan instruksi teknis, langkah penanganan, atau informasi pengumuman secara rinci di sini..."
                   value={noteFormData.isi}
                   onChange={(e) => setNoteFormData({ ...noteFormData, isi: e.target.value })}
-                  className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl p-4 sm:p-5 text-base sm:text-lg text-slate-100 focus:outline-none font-sans leading-relaxed"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all resize-none shadow-inner leading-relaxed"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-mono font-black text-slate-100 mb-2">
+                <label className="block text-slate-300 font-bold uppercase mb-2 text-xs tracking-wider">
                   Tag / Kata Kunci (Dipisahkan koma)
                 </label>
                 <input
@@ -3479,36 +3679,37 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                   placeholder="Contoh: IT, TMS, Genset, Darurat"
                   value={noteFormData.tags}
                   onChange={(e) => setNoteFormData({ ...noteFormData, tags: e.target.value })}
-                  className="w-full bg-slate-950 border-2 border-slate-700 focus:border-emerald-400 rounded-2xl px-4 py-3 text-sm sm:text-base font-bold text-slate-100 focus:outline-none"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700/80 hover:border-amber-400/80 text-white text-sm font-semibold placeholder:text-slate-500 focus:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30 transition-all shadow-inner"
                 />
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
+              <div className="flex items-center gap-3 pt-1">
                 <input
                   type="checkbox"
                   id="chk-pin-note"
                   checked={noteFormData.isPinned}
                   onChange={(e) => setNoteFormData({ ...noteFormData, isPinned: e.target.checked })}
-                  className="h-5 w-5 rounded-lg border-slate-700 bg-slate-950 text-emerald-500 focus:ring-emerald-400 cursor-pointer accent-emerald-500"
+                  className="h-4 w-4 rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-amber-400 cursor-pointer accent-amber-500"
                 />
-                <label htmlFor="chk-pin-note" className="text-sm sm:text-base font-mono font-black text-slate-100 cursor-pointer select-none">
+                <label htmlFor="chk-pin-note" className="text-xs text-slate-300 font-bold font-mono cursor-pointer select-none">
                   📌 Sematkan / Pin catatan ini di paling atas
                 </label>
               </div>
 
-              <div className="pt-5 border-t border-slate-800 flex items-center justify-end gap-4">
+              <div className="pt-6 border-t border-slate-800 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsNoteModalOpen(false)}
-                  className="px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm sm:text-base font-mono font-black transition-all cursor-pointer"
+                  className="px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-sm cursor-pointer transition-all border border-slate-700 active:scale-95"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="px-7 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-[0_0_25px_rgba(16,185,129,0.45)] hover:scale-105 active:scale-95 transition-all cursor-pointer border border-emerald-300"
+                  className="px-7 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center gap-2 cursor-pointer shadow-[0_0_20px_rgba(251,191,36,0.35)] active:scale-95 transition-all"
                 >
-                  {editingNote ? 'SIMPAN PERUBAHAN' : 'PUBLIKASIKAN CATATAN'}
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>{editingNote ? 'Simpan Perubahan' : 'Publikasikan Catatan'}</span>
                 </button>
               </div>
             </form>

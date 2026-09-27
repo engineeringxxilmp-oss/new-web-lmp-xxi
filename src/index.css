@@ -255,6 +255,8 @@
     padding: 0 3cm 2cm 3cm !important;
     width: 100% !important;
     max-width: none !important;
+    transform: none !important;
+    position: relative !important;
     page-break-after: always;
     break-after: page;
   }
@@ -344,5 +346,101 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .animate-rainbow-text {
   animation: rainbowGlowText 6s ease-in-out infinite alternate;
 }
+
+/* Responsive touch & scrollbar utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Document Preview Focus Mode (Sembunyikan bottom navigation saat preview dokumen A4 aktif) */
+body.document-preview-focus-mode #mobile-bottom-nav {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Custom Desktop Toolbar Scrollbar */
+.custom-toolbar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(6, 182, 212, 0.5) rgba(15, 23, 42, 0.6);
+}
+.custom-toolbar-scrollbar::-webkit-scrollbar {
+  height: 4px;
+}
+.custom-toolbar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(10, 15, 29, 0.7);
+  border-radius: 9999px;
+}
+.custom-toolbar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.45);
+  border-radius: 9999px;
+}
+.custom-toolbar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.85);
+}
+
+/* ==========================================================================
+   DYNAMIC SIGNATURE (TTD) LAYOUT — 3, 4, 5 ORANG (BA ORDERAN)
+   Ensures 100% balanced columns, equal width, equal spacing, and center alignment
+   in both Web Preview and exported PDF.
+   ========================================================================== */
+.ba-signature-container {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 32px auto 0 auto !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+}
+
+.ba-signature-container[data-signature-count="2"] {
+  gap: 24px !important;
+}
+
+.ba-signature-container[data-signature-count="3"] {
+  gap: 18px !important;
+}
+
+.ba-signature-container[data-signature-count="4"] {
+  gap: 12px !important;
+}
+
+.ba-signature-container[data-signature-count="5"] {
+  gap: 8px !important;
+}
+
+.ba-signature-col {
+  flex: 1 1 0px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  word-break: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* ==========================================================================
+   MODAL TAMBAH EQUIPMENT BARU — LIST PERALATAN
+   Compact desktop width (target 800px, range 750–850px, margin auto)
+   Styling khusus untuk modal Tambah Equipment Baru agar tidak merusak modal lain
+   ========================================================================== */
+#modal-card:has(#form-equipment) {
+  width: min(92vw, 800px) !important;
+  max-width: 800px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
 
 

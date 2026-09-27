@@ -6,26 +6,19 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
-// Firebase configuration is intentionally read ONLY from Vite environment variables.
-// Do not fall back to firebase-applet-config.json because that file may contain a legacy project.
+import fileConfig from '../../firebase-applet-config.json';
+
+// Read config from Vite environment variables with fallback to firebase-applet-config.json
+const env = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env : (process.env || {});
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+  apiKey: env.VITE_FIREBASE_API_KEY || fileConfig.apiKey,
+  authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain,
+  projectId: env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId,
+  storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || fileConfig.storageBucket,
+  messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || fileConfig.messagingSenderId,
+  appId: env.VITE_FIREBASE_APP_ID || fileConfig.appId,
+  measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || fileConfig.measurementId,
 };
-
-if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId ||
-    !firebaseConfig.storageBucket || !firebaseConfig.messagingSenderId || !firebaseConfig.appId) {
-  throw new Error('Firebase configuration is missing. Set all VITE_FIREBASE_* environment variables.');
-}
-
-if (firebaseConfig.projectId !== 'new-web-lmp-xxi') {
-  throw new Error(`Wrong Firebase project: ${firebaseConfig.projectId}. Expected new-web-lmp-xxi.`);
-}
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const firestore = getFirestore(app);

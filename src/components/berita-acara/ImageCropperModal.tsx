@@ -129,110 +129,112 @@ export default function ImageCropperModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-3 md:p-6 overflow-y-auto">
-      <div className="bg-[#0d1322] border border-cyan-500/50 rounded-2xl w-full max-w-2xl p-4 md:p-6 text-white shadow-[0_0_40px_rgba(0,240,255,0.25)] flex flex-col space-y-4 my-auto">
+    <div className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 md:p-6 overflow-y-auto">
+      <div className="bg-slate-900 border-2 border-amber-500/50 rounded-2xl w-full max-w-2xl text-white shadow-[0_0_60px_rgba(251,191,36,0.25)] flex flex-col my-auto overflow-hidden">
         
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-cyan-500/20 pb-3">
-          <div className="flex items-center gap-2">
-            <Crop className="w-5 h-5 text-cyan-400" />
-            <h3 className="font-extrabold text-sm md:text-base text-cyan-300 font-mono tracking-wider uppercase">
+        <div className="bg-slate-950 border-b border-amber-500/30 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Crop className="w-5 h-5 text-amber-400" />
+            <h3 className="font-bold text-sm md:text-base text-amber-400 font-mono tracking-wider uppercase">
               POTONG / CROP GAMBAR
             </h3>
           </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Crop Stage Area */}
-        <div className="relative w-full h-[320px] md:h-[380px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
-          <Cropper
-            image={imageSrc}
-            crop={crop}
-            zoom={zoom}
-            rotation={rotation}
-            aspect={aspect}
-            onCropChange={onCropChange}
-            onZoomChange={onZoomChange}
-            onCropComplete={onCropAreaChange}
-            objectFit="contain"
-          />
-        </div>
+        <div className="p-6 space-y-4">
+          {/* Crop Stage Area */}
+          <div className="relative w-full h-[320px] md:h-[380px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
+            <Cropper
+              image={imageSrc}
+              crop={crop}
+              zoom={zoom}
+              rotation={rotation}
+              aspect={aspect}
+              onCropChange={onCropChange}
+              onZoomChange={onZoomChange}
+              onCropComplete={onCropAreaChange}
+              objectFit="contain"
+            />
+          </div>
 
-        {/* Controls Bar */}
-        <div className="space-y-3 bg-[#070c1a] p-3 rounded-xl border border-slate-800 text-xs font-mono">
-          
-          {/* Aspect Ratio Selector */}
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <span className="text-slate-400 font-bold">Rasio Potong:</span>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {[
-                { label: 'Bebas (Free)', value: undefined },
-                { label: '1:1 (Persegi)', value: 1 },
-                { label: '4:3 (Standar)', value: 4 / 3 },
-                { label: '3:4 (Potret)', value: 3 / 4 },
-                { label: '16:9 (Wide)', value: 16 / 9 },
-              ].map((item, idx) => (
+          {/* Controls Bar */}
+          <div className="space-y-3 bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono">
+            
+            {/* Aspect Ratio Selector */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-slate-400 font-bold uppercase tracking-wider text-[11px]">Rasio Potong:</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {[
+                  { label: 'Bebas (Free)', value: undefined },
+                  { label: '1:1 (Persegi)', value: 1 },
+                  { label: '4:3 (Standar)', value: 4 / 3 },
+                  { label: '3:4 (Potret)', value: 3 / 4 },
+                  { label: '16:9 (Wide)', value: 16 / 9 },
+                ].map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setAspect(item.value)}
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border cursor-pointer transition-all ${
+                      aspect === item.value
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.3)]'
+                        : 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sliders: Zoom & Rotation */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-800">
+              <div className="flex items-center gap-2">
+                <ZoomIn className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-slate-400 min-w-12 text-[11px] font-bold">Zoom:</span>
+                <input
+                  type="range"
+                  value={zoom}
+                  min={1}
+                  max={3}
+                  step={0.05}
+                  aria-label="Zoom"
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  className="w-full accent-amber-400 cursor-pointer"
+                />
+                <span className="text-amber-400 w-9 text-right font-bold">{Math.round(zoom * 100)}%</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <RotateCw className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="text-slate-400 min-w-12 text-[11px] font-bold">Rotasi:</span>
                 <button
-                  key={idx}
                   type="button"
-                  onClick={() => setAspect(item.value)}
-                  className={`px-2.5 py-1 rounded text-[11px] font-bold border cursor-pointer transition-all ${
-                    aspect === item.value
-                      ? 'bg-cyan-600 border-cyan-400 text-white shadow-xs'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
-                  }`}
+                  onClick={() => setRotation((prev) => (prev + 90) % 360)}
+                  className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-lg text-[11px] text-amber-400 font-bold flex items-center gap-1.5 cursor-pointer"
                 >
-                  {item.label}
+                  <RefreshCw className="w-3 h-3" />
+                  +90° ({rotation}°)
                 </button>
-              ))}
+              </div>
             </div>
+
           </div>
-
-          {/* Sliders: Zoom & Rotation */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
-            <div className="flex items-center gap-2">
-              <ZoomIn className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span className="text-slate-400 min-w-12">Zoom:</span>
-              <input
-                type="range"
-                value={zoom}
-                min={1}
-                max={3}
-                step={0.05}
-                aria-label="Zoom"
-                onChange={(e) => setZoom(Number(e.target.value))}
-                className="w-full accent-cyan-400 cursor-pointer"
-              />
-              <span className="text-slate-300 w-8 text-right font-bold">{Math.round(zoom * 100)}%</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <RotateCw className="w-4 h-4 text-cyan-400 shrink-0" />
-              <span className="text-slate-400 min-w-12">Rotasi:</span>
-              <button
-                type="button"
-                onClick={() => setRotation((prev) => (prev + 90) % 360)}
-                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
-              >
-                <RefreshCw className="w-3 h-3" />
-                +90° ({rotation}°)
-              </button>
-            </div>
-          </div>
-
         </div>
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between pt-2 border-t border-slate-800">
+        <div className="bg-slate-950 border-t border-slate-800 px-6 py-4 flex items-center justify-between">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer"
+            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono font-bold text-xs rounded-xl border border-slate-700 transition-all cursor-pointer active:scale-95"
           >
             Batal
           </button>
@@ -241,7 +243,7 @@ export default function ImageCropperModal({
             type="button"
             onClick={handleSaveCrop}
             disabled={isProcessing}
-            className="px-5 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-mono font-bold text-xs rounded-xl shadow-[0_0_15px_rgba(0,240,255,0.4)] flex items-center gap-2 transition-all cursor-pointer"
+            className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 disabled:opacity-50 text-slate-950 font-mono font-black text-xs rounded-xl shadow-[0_0_20px_rgba(251,191,36,0.35)] flex items-center gap-2 transition-all cursor-pointer active:scale-95"
           >
             <Check className="w-4 h-4" />
             {isProcessing ? 'Memotong...' : 'Terapkan Hasil Potong'}

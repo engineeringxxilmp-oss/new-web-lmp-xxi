@@ -23,7 +23,7 @@ import {
 // Import structural components
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import { Menu, X, LogOut, User, Clock } from 'lucide-react';
+import { Menu, X, LogOut, User, Clock, LayoutDashboard, FileText, ClipboardList, PackageCheck, Search } from 'lucide-react';
 
 // Import views
 import Login, { UserSession } from './views/Login';
@@ -55,6 +55,21 @@ export interface Toast {
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isMobileDocumentPreviewOpen, setIsMobileDocumentPreviewOpen] = useState(false);
+
+  // Reset focus preview mode when navigating between tabs
+  useEffect(() => {
+    if (activeTab !== 'berita-acara-permintaan') {
+      setIsMobileDocumentPreviewOpen(false);
+    }
+  }, [activeTab]);
+
+  // Tutup sidebar jika fullscreen preview mobile aktif
+  useEffect(() => {
+    if (isMobileDocumentPreviewOpen) {
+      setSidebarOpen(false);
+    }
+  }, [isMobileDocumentPreviewOpen]);
 
   // User Auth State
   const [currentUser, setCurrentUser] = useState<UserSession | null>(() => {
@@ -455,6 +470,8 @@ export default function App() {
           <PrEngineeringView
             prList={prList}
             areas={areas}
+            equipment={equipment}
+            branding={branding}
             onSave={handleSavePrEngineering}
             onDelete={handleDeletePrEngineering}
           />
@@ -464,6 +481,7 @@ export default function App() {
           <VendorTeknisiView
             vendors={vendors}
             areas={areas}
+            branding={branding}
             onSave={handleSaveVendor}
             onDelete={handleDeleteVendor}
           />
@@ -530,6 +548,8 @@ export default function App() {
         return (
           <BeritaAcaraPermintaanView
             onShowToast={triggerToast}
+            isMobileDocumentPreviewOpen={isMobileDocumentPreviewOpen}
+            setIsMobileDocumentPreviewOpen={setIsMobileDocumentPreviewOpen}
           />
         );
       case 'sop-knowledge':
@@ -600,6 +620,30 @@ export default function App() {
     }
   };
 
+  const getActiveTabTitle = (tab: string) => {
+    switch (tab) {
+      case 'dashboard': return 'Dashboard';
+      case 'master-area': return 'Master Area';
+      case 'ip-credential-manager': return 'IP & Login';
+      case 'equipment': return 'List Peralatan';
+      case 'pr-engineering': return 'PR Teknik';
+      case 'vendor-teknisi': return 'Service Vendor';
+      case 'order-dan-barang-datang': return 'Orderan';
+      case 'order-barang': return 'Order Barang';
+      case 'barang-datang': return 'Barang Datang';
+      case 'riwayat-equipment': return 'Rapot Area';
+      case 'report-history': return 'Rapot STD';
+      case 'berita-acara-permintaan': return 'BA Orderan';
+      case 'sop-knowledge': return 'Kitab XXI';
+      case 'rapot-film': return 'Rapot Film';
+      case 'film-upload': return 'Log Film';
+      case 'laporan-film': return 'Laporan Film';
+      case 'laporan': return 'Laporan';
+      case 'pengaturan': return 'Pengaturan';
+      default: return 'Sistem XXI';
+    }
+  };
+
   if (!currentUser) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
@@ -626,34 +670,51 @@ export default function App() {
       {/* Main Workspace Frame */}
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto" id="app-workspace-scroll">
         
-        {/* Mobile Sticky Top Navigation Header */}
-        <div className="md:hidden bg-[#070b16]/95 backdrop-blur-xl border-b border-cyan-500/30 px-3.5 py-2.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-15 rounded-lg bg-cyan-950 border border-cyan-400/60 flex items-center justify-center text-cyan-300 font-black text-[11px] font-mono shadow-[0_0_10px_rgba(0,240,255,0.4)] shrink-0">
-              NSR014
+        {/* Mobile Sticky Top Navigation Header (Disembunyikan saat fullscreen mobile preview dokumen aktif) */}
+        {!isMobileDocumentPreviewOpen && (
+          <div className="md:hidden bg-[#070b16]/95 backdrop-blur-xl border-b border-cyan-500/30 px-3 py-2 flex items-center justify-between sticky top-0 z-30 shadow-md">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-7.5 w-14 rounded-lg bg-cyan-950 border border-cyan-400/60 flex items-center justify-center text-cyan-300 font-black text-[10px] font-mono shadow-[0_0_8px_rgba(0,240,255,0.4)] shrink-0">
+                NSR014
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-black tracking-tight text-amber-300 uppercase leading-none truncate">
+                  {getActiveTabTitle(activeTab)}
+                </p>
+                <p className="text-[9px] font-semibold text-cyan-400 uppercase tracking-wider mt-0.5 truncate">
+                  {currentUser.name}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-black tracking-tight text-amber-300 uppercase leading-none drop-shadow-[0_0_6px_rgba(251,191,36,0.6)] truncate">CINEMA XXI</p>
-              <p className="text-[9px] font-extrabold text-cyan-300 uppercase tracking-wider mt-0.5 truncate">{currentUser.name}</p>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  const searchBtn = document.getElementById('global-search-btn');
+                  if (searchBtn) searchBtn.click();
+                }}
+                className="p-1.5 rounded-lg bg-slate-900/90 border border-cyan-500/40 text-cyan-300 text-xs flex items-center justify-center cursor-pointer shadow-xs active:scale-95"
+                title="Cari"
+              >
+                <Search className="w-4 h-4 text-cyan-400" />
+              </button>
+              <button
+                onClick={handleLogout}
+                className="p-1.5 rounded-lg bg-rose-950/80 border border-rose-500/50 text-rose-300 text-xs font-mono font-bold flex items-center justify-center cursor-pointer active:scale-95"
+                title="Keluar"
+              >
+                <LogOut className="w-4 h-4 text-rose-400" />
+              </button>
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="h-8.5 w-8.5 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-400/50 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.3)] shrink-0"
+                id="mobile-top-menu-btn"
+                title="Buka Menu"
+              >
+                {sidebarOpen ? <X className="h-4.5 w-4.5" /> : <Menu className="h-4.5 w-4.5" />}
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleLogout}
-              className="p-2 rounded-lg bg-rose-950/80 border border-rose-500/50 text-rose-300 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer"
-              title="Keluar"
-            >
-              <LogOut className="w-3.5 h-3.5 text-rose-400" />
-            </button>
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="h-9 w-9 rounded-xl bg-cyan-950 text-cyan-300 border border-cyan-400/50 flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.3)] shrink-0"
-              id="mobile-top-menu-btn"
-            >
-              {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Desktop Sticky Top Navigation Bar across all views */}
         <div className="hidden md:flex items-center justify-between sticky top-0 z-30 bg-[#070b16]/90 backdrop-blur-2xl border-b border-cyan-500/30 px-6 py-2.5 shadow-[0_4px_25px_rgba(0,0,0,0.6)] shrink-0 gap-4">
@@ -741,13 +802,13 @@ export default function App() {
 
         {/* Dynamic header customizer with responsive padding matching main content - only rendered on dashboard */}
         {activeTab === 'dashboard' && (
-          <div className="px-3 sm:px-6 md:px-8 pt-4 w-full max-w-[100vw] mx-auto">
+          <div className="px-2.5 sm:px-6 md:px-8 pt-3 sm:pt-4 w-full max-w-[100vw] mx-auto">
             <Header branding={branding} saveStatus={saveStatus} onChangeTab={setActiveTab} currentUser={currentUser} onLogout={handleLogout} />
           </div>
         )}
 
         {/* Tab Canvas Content area with safe margins and responsive containers */}
-        <main className="flex-1 px-3 sm:px-6 md:px-8 py-5 w-full max-w-[100vw] mx-auto" id="main-content-view">
+        <main className="flex-1 px-2.5 sm:px-6 md:px-8 py-3.5 sm:py-5 pb-24 md:pb-6 w-full max-w-[100vw] mx-auto" id="main-content-view">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -760,6 +821,71 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* Mobile Bottom Quick Navigation Bar (Disembunyikan saat fullscreen mobile preview dokumen aktif) */}
+        {!isMobileDocumentPreviewOpen && (
+          <nav
+            className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#070b16]/95 backdrop-blur-2xl border-t border-cyan-500/30 px-1 py-1.5 shadow-[0_-4px_25px_rgba(0,0,0,0.8)] flex items-center justify-around"
+            id="mobile-bottom-nav"
+          >
+            <button
+              onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); }}
+              className={`flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl transition-all cursor-pointer min-h-[44px] ${
+                activeTab === 'dashboard'
+                  ? 'text-cyan-300 font-black bg-cyan-950/70 border border-cyan-400/50 shadow-[0_0_12px_rgba(0,240,255,0.25)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutDashboard className="w-4.5 h-4.5 mb-0.5" />
+              <span className="text-[10px] font-mono leading-none">Menu</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab('berita-acara-permintaan'); setSidebarOpen(false); }}
+              className={`flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl transition-all cursor-pointer min-h-[44px] ${
+                activeTab === 'berita-acara-permintaan'
+                  ? 'text-amber-300 font-black bg-amber-950/70 border border-amber-400/50 shadow-[0_0_12px_rgba(251,191,36,0.25)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <FileText className="w-4.5 h-4.5 mb-0.5" />
+              <span className="text-[10px] font-mono leading-none">BA Order</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab('pr-engineering'); setSidebarOpen(false); }}
+              className={`flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl transition-all cursor-pointer min-h-[44px] ${
+                activeTab === 'pr-engineering'
+                  ? 'text-rose-300 font-black bg-rose-950/70 border border-rose-400/50 shadow-[0_0_12px_rgba(244,63,94,0.25)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ClipboardList className="w-4.5 h-4.5 mb-0.5" />
+              <span className="text-[10px] font-mono leading-none">PR Teknik</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab('order-dan-barang-datang'); setSidebarOpen(false); }}
+              className={`flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl transition-all cursor-pointer min-h-[44px] ${
+                activeTab === 'order-dan-barang-datang' || activeTab === 'order-barang' || activeTab === 'barang-datang'
+                  ? 'text-teal-300 font-black bg-teal-950/70 border border-teal-400/50 shadow-[0_0_12px_rgba(45,212,191,0.25)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <PackageCheck className="w-4.5 h-4.5 mb-0.5" />
+              <span className="text-[10px] font-mono leading-none">Orderan</span>
+            </button>
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl transition-all cursor-pointer min-h-[44px] ${
+                sidebarOpen
+                  ? 'text-cyan-300 font-black bg-cyan-950/90 border border-cyan-400 shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              id="mobile-bottom-menu-toggle"
+            >
+              <Menu className="w-4.5 h-4.5 mb-0.5" />
+              <span className="text-[10px] font-mono leading-none">Semua</span>
+            </button>
+          </nav>
+        )}
       </div>
 
       {/* Floating Toast Notifications */}

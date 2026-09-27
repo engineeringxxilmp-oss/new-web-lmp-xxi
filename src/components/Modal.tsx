@@ -6,6 +6,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   isOpen: boolean;
@@ -34,16 +35,16 @@ export default function Modal({
     full: 'max-w-[99vw] w-[99vw]'
   };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto my-auto">
+        <div className="fixed inset-0 z-[70] flex items-start sm:items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto my-auto">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.75 }}
+            animate={{ opacity: 0.85 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/85 backdrop-blur-md"
             onClick={onClose}
             id="modal-backdrop"
           />
@@ -54,7 +55,7 @@ export default function Modal({
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.96, opacity: 0, y: 15 }}
             transition={{ type: 'spring', damping: 28, stiffness: 380 }}
-            className={`relative w-full ${widthClasses[maxWidth]} my-auto overflow-hidden rounded-2xl bg-[#0a0f1d]/95 backdrop-blur-2xl text-slate-100 shadow-[0_0_60px_rgba(0,240,255,0.25)] border border-cyan-500/40 z-10 flex flex-col ${
+            className={`relative w-full ${widthClasses[maxWidth]} my-auto overflow-hidden rounded-2xl bg-slate-900 text-slate-100 shadow-[0_0_60px_rgba(251,191,36,0.25)] border border-amber-500/50 z-10 flex flex-col ${
               maxWidth === 'full'
                 ? 'h-[98vh] max-h-[98vh]'
                 : 'max-h-[92vh] sm:max-h-[90vh]'
@@ -62,16 +63,23 @@ export default function Modal({
             id="modal-card"
           >
             {/* Header */}
-            <div className="px-5 sm:px-7 py-3.5 border-b border-cyan-500/30 flex items-center justify-between bg-[#0f172a]/95 backdrop-blur-md sticky top-0 z-20 shrink-0">
-              <div className="flex items-center gap-3">
-                <span className="w-3 h-3 rounded-full bg-cyan-400 shadow-[0_0_12px_#00f0ff] animate-pulse" />
-                <h3 className="text-lg sm:text-xl md:text-2xl font-black text-white font-sans tracking-tight drop-shadow-[0_0_8px_rgba(0,240,255,0.3)]" id="modal-title">
-                  {title}
-                </h3>
+            <div className="px-6 sm:px-8 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-900 sticky top-0 z-20 shrink-0">
+              <div className="flex items-center gap-3 text-amber-400 font-mono font-bold text-base sm:text-lg">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-inner">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_10px_#fbbf24] block" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-white tracking-wide" id="modal-title">
+                    {title}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-normal mt-0.5">
+                    Lippo Mall Puri XXI — Cinema Engineering System
+                  </p>
+                </div>
               </div>
               <button
                 onClick={onClose}
-                className="text-slate-300 hover:text-cyan-300 transition-colors rounded-xl p-2 hover:bg-cyan-950/80 cursor-pointer border border-transparent hover:border-cyan-500/30"
+                className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white cursor-pointer transition-colors border border-transparent hover:border-slate-700 active:scale-95"
                 id="modal-close-btn"
                 title="Tutup Modal"
               >
@@ -80,7 +88,7 @@ export default function Modal({
             </div>
 
             {/* Content (Scrollable if needed) */}
-            <div className={`flex-1 overflow-y-auto ${maxWidth === 'full' ? 'p-2 sm:p-4 flex flex-col' : 'p-4 sm:p-6 md:p-7'}`} id="modal-content">
+            <div className={`flex-1 overflow-y-auto ${maxWidth === 'full' ? 'p-2 sm:p-4 flex flex-col' : 'p-6 sm:p-8'}`} id="modal-content">
               {children}
             </div>
           </motion.div>
@@ -88,4 +96,7 @@ export default function Modal({
       )}
     </AnimatePresence>
   );
+
+  if (typeof document === 'undefined') return null;
+  return createPortal(modalContent, document.body);
 }
