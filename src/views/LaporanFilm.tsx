@@ -550,7 +550,10 @@ export default function LaporanFilm({
       return;
     }
 
-    const existingReport = weeklyReports.find(r => r.periode === selectedWeek);
+    const norm = (p: string) => (p || '').replace(/\s*(?:[-–—]|s\/d|sd|sampai)\s*/gi, ' - ').trim().toLowerCase();
+    const existingReport = weeklyReports.find(
+      (r) => r.periode === selectedWeek || norm(r.periode) === norm(selectedWeek)
+    );
     if (existingReport) {
       setActiveReport(prev => {
         if (prev && prev.id === existingReport.id && prev.report_json === existingReport.report_json) {
@@ -1238,9 +1241,12 @@ Operator Proyeksi / Engineering XXI LMP`;
     window.open(gmailUrl, '_blank');
   };
 
+  // Loading & Error States for Film Deletion
+  const [deletingFilmId, setDeletingFilmId] = useState<string | null>(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+
   // Film data calculations for currently active report (Strictly Manual Status & KDM)
-  // ONLY populated when films have been imported via "IMPORT KE LAPORAN FILM".
-  // Before import, Laporan Film MUST be completely empty (NO IMPORT -> NO FILM DATA -> NO FILM ROW).
+  // ONLY populated when films have been imported via "IMPORT KE LAPORAN FILM" or present in active report.
   let reportFilms: GeneratedFilm[] = [];
 
   if (activeReport) {
@@ -1250,16 +1256,18 @@ Operator Proyeksi / Engineering XXI LMP`;
       // Strictly ignore any legacy master film auto-dump (e.g. 34 films flm-01..flm-34 or 4 initial mock films without is_imported)
       const isLegacyMasterDump =
         (rawFilms.length === 34 && rawFilms.every((f) => f.id?.startsWith('flm-'))) ||
-        (rawFilms.length <= 4 && rawFilms.every((f) => f.id?.startsWith('film-')) && !parsed.is_imported);
+        (rawFilms.length <= 4 && rawFilms.every((f) => f.id?.startsWith('film-')) && !parsed.is_imported && (activeReport.id || '').startsWith('wr-mock'));
 
       if (!isLegacyMasterDump && rawFilms.length > 0) {
-        reportFilms = rawFilms.map((film) => {
+        reportFilms = rawFilms.map((film, fIdx) => {
           let currentStatus = (film.status_tayang || 'BELUM TAYANG').toUpperCase();
           if (!['BELUM TAYANG', 'SEDANG TAYANG', 'SUDAH TAYANG'].includes(currentStatus)) {
             currentStatus = 'BELUM TAYANG';
           }
+          const validId = film.id || `film-${fIdx}-${(film.judul_film || '').replace(/[^a-zA-Z0-9]/g, '')}`;
           return {
             ...film,
+            id: validId,
             status_tayang: currentStatus
           };
         });
@@ -1267,6 +1275,34 @@ Operator Proyeksi / Engineering XXI LMP`;
     } catch {
       reportFilms = [];
     }
+  } else {
+    // Draft fallback: if activeReport has not been initialized yet, check draft storage
+    try {
+      const savedDraft = localStorage.getItem('xxi_selected_laporan_films');
+      if (savedDraft) {
+        const parsedDraft = JSON.parse(savedDraft);
+        if (Array.isArray(parsedDraft) && parsedDraft.length > 0) {
+          reportFilms = parsedDraft.map((film, fIdx) => {
+            const validId = film.id || `draft-${fIdx}-${(film.judul_film || '').replace(/[^a-zA-Z0-9]/g, '')}`;
+            return {
+              id: validId,
+              judul_film: (film.judul_film || '').toUpperCase().trim(),
+              studio: film.studio || 'Studio 1',
+              format_film: film.format_film || '2D Flat',
+              format_sound: film.format_sound || '5.1',
+              cpl: (film.cpl || film.singkatan_film || (film.judul_film || '').substring(0, 3)).toUpperCase().trim(),
+              kdm: film.kdm || film.status_kdm || 'Aktif',
+              status_upload: film.status_upload || 'Berhasil',
+              status_dcp: film.status_dcp || 'Lengkap',
+              tanggal_upload: film.tanggal_upload || new Date().toISOString().split('T')[0],
+              ukuran_file: film.ukuran_file || '150 GB',
+              keterangan: film.keterangan || '',
+              status_tayang: (film.status_tayang || 'BELUM TAYANG').toUpperCase()
+            };
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   // Handle manual status update on active report (NEVER touches Master Film)
@@ -1316,48 +1352,144 @@ Operator Proyeksi / Engineering XXI LMP`;
   // State and Handlers for Manual Edit & Delete Film in Report (Requirement G & H)
   const [editingReportFilm, setEditingReportFilm] = useState<GeneratedFilm | null>(null);
 
-  // Handle single film deletion from active report (Requirement G)
+  // Helper for normalizing period string comparison
+  const normalizePeriod = (p: string) => (p || '').replace(/\s*(?:[-–—]|s\/d|sd|sampai)\s*/gi, ' - ').trim().toLowerCase();
+
+  // Handle single film deletion from active report or draft
   const handleDeleteReportFilm = async (filmId: string, judulFilm: string) => {
-    if (!activeReport) return;
-    const confirmDelete = window.confirm(
-      `Hapus film "${(judulFilm || '').toUpperCase()}" dari Laporan Film periode ${activeReport.periode}?\n\n` +
-      `Catatan: Master Film Tahunan tetap utuh dan terlindungi.`
-    );
-    if (!confirmDelete) return;
+    setDeletingFilmId(filmId);
+    setDeleteErrorMessage(null);
 
     try {
-      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
-      const remainingFilms = (parsed.films || []).filter((f) => f.id !== filmId);
-      const updatedPayload: ReportPayload = {
-        ...parsed,
-        films: remainingFilms
-      };
-      const updated: WeeklyReport = {
-        ...activeReport,
-        jumlah_film: remainingFilms.length,
-        jumlah_kdm: remainingFilms.filter((f) => f.kdm === 'Aktif' || !['Expired', 'Tidak Ada', 'Tidak Aktif', 'TIDAK AKTIF'].includes(f.kdm)).length,
-        jumlah_upload: remainingFilms.length,
-        report_json: JSON.stringify(updatedPayload)
-      };
-      await db.saveWeeklyReport(updated);
-      setWeeklyReports(db.getWeeklyReports());
-      setActiveReport(updated);
+      const targetId = String(filmId || '').trim();
+      const targetTitle = String(judulFilm || '').trim().toUpperCase();
+
+      // Resolve current report from activeReport state or search weeklyReports
+      let targetReport = activeReport;
+      if (!targetReport && weeklyReports.length > 0) {
+        targetReport =
+          weeklyReports.find(
+            (r) => r.periode === selectedWeek || normalizePeriod(r.periode) === normalizePeriod(selectedWeek)
+          ) || weeklyReports[0] || null;
+      }
+
+      let remainingFilms: GeneratedFilm[] = [];
+
+      // 1. If an active weekly report exists, delete the film from this report
+      if (targetReport) {
+        let parsed: ReportPayload & { is_imported?: boolean };
+        try {
+          parsed = JSON.parse(targetReport.report_json);
+        } catch {
+          parsed = { films: [], notes: '' };
+        }
+
+        const currentFilms = parsed.films || [];
+        let deleted = false;
+
+        // Filter out ONLY the film on this row based on its ID (fallback to unique title match if ID missing)
+        remainingFilms = currentFilms.filter((f, idx) => {
+          const fId = f.id ? String(f.id).trim() : '';
+          const fTitle = (f.judul_film || '').trim().toUpperCase();
+
+          if (targetId && fId && fId === targetId) {
+            deleted = true;
+            return false;
+          }
+          if (targetId && targetId === `film-${idx}-${fTitle.replace(/[^a-zA-Z0-9]/g, '')}`) {
+            deleted = true;
+            return false;
+          }
+          if (targetId && targetId === `draft-${idx}-${fTitle.replace(/[^a-zA-Z0-9]/g, '')}`) {
+            deleted = true;
+            return false;
+          }
+          if (!deleted && targetTitle && fTitle === targetTitle) {
+            deleted = true;
+            return false;
+          }
+          return true;
+        });
+
+        const updatedPayload: ReportPayload & { is_imported: boolean } = {
+          ...parsed,
+          is_imported: true,
+          films: remainingFilms
+        };
+
+        const updatedReport: WeeklyReport = {
+          ...targetReport,
+          jumlah_film: remainingFilms.length,
+          jumlah_kdm: remainingFilms.filter(
+            (f) =>
+              f.kdm === 'Aktif' ||
+              !['Expired', 'Tidak Ada', 'Tidak Aktif', 'TIDAK AKTIF'].includes(f.kdm)
+          ).length,
+          jumlah_upload: remainingFilms.length,
+          report_json: JSON.stringify(updatedPayload)
+        };
+
+        // Persist directly to local cache and Firestore
+        await db.saveWeeklyReport(updatedReport);
+
+        // Synchronously update local React state so row and preview update immediately
+        const freshReports = db.getWeeklyReports();
+        setWeeklyReports(freshReports);
+        setActiveReport(updatedReport);
+      }
+
+      // 2. Also remove from local Draft storage (xxi_selected_laporan_films)
+      try {
+        const savedDraft = localStorage.getItem('xxi_selected_laporan_films');
+        if (savedDraft) {
+          const draftList = JSON.parse(savedDraft);
+          if (Array.isArray(draftList)) {
+            let draftDeleted = false;
+            const remainingDraft = draftList.filter((f: any, idx: number) => {
+              const fId = f.id ? String(f.id).trim() : '';
+              const fTitle = (f.judul_film || '').trim().toUpperCase();
+              if (targetId && fId && fId === targetId) {
+                draftDeleted = true;
+                return false;
+              }
+              if (targetId && targetId === `film-${idx}-${fTitle.replace(/[^a-zA-Z0-9]/g, '')}`) {
+                draftDeleted = true;
+                return false;
+              }
+              if (targetId && targetId === `draft-${idx}-${fTitle.replace(/[^a-zA-Z0-9]/g, '')}`) {
+                draftDeleted = true;
+                return false;
+              }
+              if (!draftDeleted && targetTitle && fTitle === targetTitle) {
+                draftDeleted = true;
+                return false;
+              }
+              return true;
+            });
+            localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(remainingDraft));
+            if (remainingDraft.length === 0) {
+              localStorage.removeItem('xxi_has_imported_to_laporan');
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 3. Clear selected checkbox state for this film
       setSelectedReportFilmIds((prev) => {
         const next = { ...prev };
         delete next[filmId];
         return next;
       });
+
+      // 4. Invalidate PDF preview ref so Paper Preview updates immediately
       masterPdfRef.current = null;
-      try {
-        localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(remainingFilms));
-        if (remainingFilms.length === 0) {
-          localStorage.removeItem('xxi_has_imported_to_laporan');
-          localStorage.removeItem('xxi_selected_laporan_films');
-        }
-      } catch (_) {}
-    } catch (e) {
-      console.error('Error deleting report film:', e);
-      alert('Gagal menghapus film dari Laporan Film.');
+    } catch (err: any) {
+      console.error('Error deleting report film:', err);
+      const errMsg = err?.message || 'Gagal menghapus film dari Laporan Film.';
+      setDeleteErrorMessage(errMsg);
+      alert(`Gagal menghapus film: ${errMsg}`);
+    } finally {
+      setDeletingFilmId(null);
     }
   };
 
@@ -1382,45 +1514,60 @@ Operator Proyeksi / Engineering XXI LMP`;
   };
 
   const handleBulkDeleteReportFilms = async () => {
-    if (!activeReport) return;
     const selectedIds = Object.keys(selectedReportFilmIds).filter((id) => selectedReportFilmIds[id]);
     if (selectedIds.length === 0) return;
 
-    const confirmDelete = window.confirm(
-      `Hapus ${selectedIds.length} film terpilih dari Laporan Film periode ${activeReport.periode}?\n\n` +
-      `Catatan: Master Film Tahunan tetap utuh dan terlindungi.`
-    );
-    if (!confirmDelete) return;
-
     try {
-      const parsed = JSON.parse(activeReport.report_json) as ReportPayload;
-      const remainingFilms = (parsed.films || []).filter((f) => !selectedReportFilmIds[f.id]);
-      const updatedPayload: ReportPayload = {
-        ...parsed,
-        films: remainingFilms
-      };
-      const updated: WeeklyReport = {
-        ...activeReport,
-        jumlah_film: remainingFilms.length,
-        jumlah_kdm: remainingFilms.filter((f) => f.kdm === 'Aktif' || !['Expired', 'Tidak Ada', 'Tidak Aktif', 'TIDAK AKTIF'].includes(f.kdm)).length,
-        jumlah_upload: remainingFilms.length,
-        report_json: JSON.stringify(updatedPayload)
-      };
-      await db.saveWeeklyReport(updated);
-      setWeeklyReports(db.getWeeklyReports());
-      setActiveReport(updated);
+      let targetReport = activeReport;
+      if (!targetReport && weeklyReports.length > 0) {
+        targetReport =
+          weeklyReports.find(
+            (r) => r.periode === selectedWeek || normalizePeriod(r.periode) === normalizePeriod(selectedWeek)
+          ) || weeklyReports[0] || null;
+      }
+
+      if (targetReport) {
+        const parsed = JSON.parse(targetReport.report_json) as ReportPayload;
+        const remainingFilms = (parsed.films || []).filter((f) => !selectedReportFilmIds[f.id]);
+        const updatedPayload: ReportPayload & { is_imported: boolean } = {
+          ...parsed,
+          is_imported: true,
+          films: remainingFilms
+        };
+        const updated: WeeklyReport = {
+          ...targetReport,
+          jumlah_film: remainingFilms.length,
+          jumlah_kdm: remainingFilms.filter(
+            (f) => f.kdm === 'Aktif' || !['Expired', 'Tidak Ada', 'Tidak Aktif', 'TIDAK AKTIF'].includes(f.kdm)
+          ).length,
+          jumlah_upload: remainingFilms.length,
+          report_json: JSON.stringify(updatedPayload)
+        };
+        await db.saveWeeklyReport(updated);
+        setWeeklyReports(db.getWeeklyReports());
+        setActiveReport(updated);
+      }
+
       setSelectedReportFilmIds({});
       masterPdfRef.current = null;
       try {
-        localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(remainingFilms));
-        if (remainingFilms.length === 0) {
-          localStorage.removeItem('xxi_has_imported_to_laporan');
-          localStorage.removeItem('xxi_selected_laporan_films');
+        const savedDraft = localStorage.getItem('xxi_selected_laporan_films');
+        if (savedDraft) {
+          const draftList = JSON.parse(savedDraft);
+          if (Array.isArray(draftList)) {
+            const remainingDraft = draftList.filter((f: any) => !selectedReportFilmIds[f.id]);
+            localStorage.setItem('xxi_selected_laporan_films', JSON.stringify(remainingDraft));
+            if (remainingDraft.length === 0) {
+              localStorage.removeItem('xxi_has_imported_to_laporan');
+            }
+          }
         }
       } catch (_) {}
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error bulk deleting report films:', e);
-      alert('Gagal menghapus film-film terpilih dari Laporan Film.');
+      const errMsg = e?.message || 'Gagal menghapus film-film terpilih dari Laporan Film.';
+      setDeleteErrorMessage(errMsg);
+      alert(`Gagal menghapus film-film terpilih: ${errMsg}`);
     }
   };
 
@@ -2115,8 +2262,27 @@ Operator Proyeksi / Engineering XXI LMP`;
               </div>
             </div>
 
-            {/* Interactive Editable Table: EDIT -> PREVIEW -> CEK -> GENERATE PDF */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl p-5 space-y-4">
+            {/* 2-Column Layout: KIRI = Editor Status/Tabel, KANAN = Paper Preview */}
+            <div className={showPreview ? "grid grid-cols-1 xl:grid-cols-2 gap-6 items-start" : "grid grid-cols-1 gap-6 items-start"}>
+              {/* KOLOM KIRI: STATUS TAYANG & STATUS KDM MANUAL (EDITABLE) */}
+              <div className="w-full min-w-0">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl p-5 space-y-4">
+              {deleteErrorMessage && (
+                <div className="bg-rose-950/80 border border-rose-500/50 text-rose-300 text-xs px-4 py-2.5 rounded-xl flex items-center justify-between font-mono animate-fade-in">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    <span>{deleteErrorMessage}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteErrorMessage(null)}
+                    className="text-rose-400 hover:text-white transition"
+                    title="Tutup pesan error"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div>
                   <h3 className="text-base font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
@@ -2371,11 +2537,16 @@ Operator Proyeksi / Engineering XXI LMP`;
                               {/* Single Film Delete Button (Requirement G) */}
                               <button
                                 type="button"
+                                disabled={deletingFilmId === film.id}
                                 onClick={() => handleDeleteReportFilm(film.id, film.judul_film)}
-                                className="p-1.5 rounded-lg hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-500/40 transition cursor-pointer"
+                                className="p-1.5 rounded-lg hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-500/40 transition cursor-pointer disabled:opacity-40"
                                 title={`Hapus film "${film.judul_film}" dari Laporan`}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {deletingFilmId === film.id ? (
+                                  <RefreshCw className="w-4 h-4 animate-spin text-rose-400" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
                               </button>
                             </td>
                           </tr>
@@ -2386,9 +2557,12 @@ Operator Proyeksi / Engineering XXI LMP`;
                 </table>
               </div>
             </div>
+          </div>
 
+          {/* KOLOM KANAN: PAPER PREVIEW / PRATINJAU KERTAS */}
+          <div className={showPreview ? "w-full min-w-0" : "absolute -left-[9999px] -top-[9999px] pointer-events-none"}>
             {/* Paper View Container A4 Landscape */}
-            <div className={showPreview ? "overflow-x-auto pb-4 pt-2 animate-fade-in" : "absolute -left-[9999px] -top-[9999px] pointer-events-none"}>
+            <div className="overflow-x-auto pb-4 pt-2 animate-fade-in">
               <div className="min-w-[850px] max-w-4xl mx-auto" id="printable-area-outer">
                   <div
                     className="bg-white text-gray-900 rounded-sm shadow-2xl p-8 font-sans border border-gray-300 relative select-text"
@@ -2539,7 +2713,9 @@ Operator Proyeksi / Engineering XXI LMP`;
                   </div>
                 </div>
               </div>
-          </>
+            </div>
+          </div>
+        </>
         )}
       </div>
 

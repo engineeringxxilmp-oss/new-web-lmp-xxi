@@ -22,6 +22,100 @@ function getGenAIClient(): GoogleGenAI | null {
   });
 }
 
+// Candidate multimodal models in order of priority
+const GEMINI_CANDIDATE_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-3.8-flash",
+  "gemini-3.6-flash",
+  "gemini-flash-latest"
+];
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function callGeminiVision(
+  ai: GoogleGenAI,
+  prompt: string,
+  mimeType: string,
+  base64Data: string,
+  options: { responseMimeType?: string; temperature?: number; maxOutputTokens?: number } = {}
+) {
+  let lastErr: any = null;
+
+  for (const model of GEMINI_CANDIDATE_MODELS) {
+    const maxRetries = 2;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const config: any = {
+          temperature: options.temperature ?? 0.1,
+          maxOutputTokens: options.maxOutputTokens ?? 8192
+        };
+        if (options.responseMimeType) {
+          config.responseMimeType = options.responseMimeType;
+        }
+        const res = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType, data: base64Data } }
+              ]
+            }
+          ],
+          config
+        });
+        if (res && res.text) {
+          return { text: res.text, model };
+        }
+      } catch (err: any) {
+        lastErr = err;
+        const status = err?.status || err?.code || err?.error?.code || 0;
+        const msg = (err?.message || "").toLowerCase();
+        const errJsonStr = JSON.stringify(err || {}).toLowerCase();
+
+        // If quota exceeded (429 RESOURCE_EXHAUSTED), do NOT retry this model. Jump directly to next model!
+        const isQuotaExceeded =
+          status === 429 ||
+          err?.status === "RESOURCE_EXHAUSTED" ||
+          err?.error?.status === "RESOURCE_EXHAUSTED" ||
+          msg.includes("quota") ||
+          msg.includes("resource_exhausted") ||
+          errJsonStr.includes("quota") ||
+          errJsonStr.includes("resource_exhausted");
+
+        if (isQuotaExceeded) {
+          console.log(`[Gemini Vision] Model ${model} quota exhausted (429), switching to next model...`);
+          break; // Move immediately to next candidate model
+        }
+
+        const isTransient503 =
+          status === 503 ||
+          err?.status === "UNAVAILABLE" ||
+          err?.error?.status === "UNAVAILABLE" ||
+          msg.includes("503") ||
+          msg.includes("high demand") ||
+          msg.includes("unavailable") ||
+          errJsonStr.includes("503") ||
+          errJsonStr.includes("unavailable") ||
+          errJsonStr.includes("high demand");
+
+        if (isTransient503 && attempt < maxRetries) {
+          const waitTime = Math.min(1000 * Math.pow(1.5, attempt) + Math.floor(Math.random() * 500), 5000);
+          console.log(`[Gemini Vision] Model ${model} temporarily busy (${status || '503'}), retrying in ${Math.round(waitTime)}ms (attempt ${attempt + 1}/${maxRetries})...`);
+          await sleep(waitTime);
+          continue;
+        }
+
+        console.log(`[Gemini Vision] Model ${model} unavailable (${status || err.message}), trying next candidate model...`);
+        break; // Move to next candidate model
+      }
+    }
+  }
+
+  throw lastErr;
+}
+
 // Body parser for JSON and large file uploads (e.g. PDF base64)
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -241,7 +335,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// OCR.space Proxy Endpoint
+// OCR.space Proxy Endpoint with Multi-Tier Fallback (OCR.space -> Gemini Vision -> Browser Local OCR)
 app.post("/api/ocr-space", async (req, res) => {
   try {
     const { imageBase64, language = "eng", isTable = true, isOverlayRequired = true, OCREngine = "2" } = req.body;
@@ -249,52 +343,157 @@ app.post("/api/ocr-space", async (req, res) => {
       return res.status(400).json({ success: false, error: "imageBase64 is required" });
     }
 
-    const apiKey = process.env.OCR_SPACE_API_KEY || "K88888888888957";
+    const apiKey = process.env.OCR_SPACE_API_KEY;
+    const isApiKeyConfigured = Boolean(apiKey && apiKey.trim() && apiKey.trim() !== "K88888888888957");
 
-    const formattedBase64 = imageBase64.startsWith("data:")
-      ? imageBase64
-      : `data:image/png;base64,${imageBase64}`;
+    // Tier 1: Try OCR.space API if a valid API key is configured
+    if (isApiKeyConfigured) {
+      try {
+        const formattedBase64 = imageBase64.startsWith("data:")
+          ? imageBase64
+          : `data:image/png;base64,${imageBase64}`;
 
-    // OCR.space accepts application/x-www-form-urlencoded with base64Image
-    const formData = new URLSearchParams();
-    formData.append("apikey", apiKey);
-    formData.append("base64Image", formattedBase64);
-    formData.append("language", language);
-    formData.append("isOverlayRequired", isOverlayRequired ? "true" : "false");
-    formData.append("isTable", isTable ? "true" : "false");
-    formData.append("scale", "true");
-    formData.append("OCREngine", String(OCREngine));
+        const formData = new URLSearchParams();
+        formData.append("apikey", (apiKey || "").trim());
+        formData.append("base64Image", formattedBase64);
+        formData.append("language", language);
+        formData.append("isOverlayRequired", isOverlayRequired ? "true" : "false");
+        formData.append("isTable", isTable ? "true" : "false");
+        formData.append("scale", "true");
+        formData.append("OCREngine", String(OCREngine));
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const ocrResponse = await fetch("https://api.ocr.space/parse/image", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "apikey": apiKey,
-      },
-      body: formData.toString(),
-      signal: controller.signal,
-    });
+        const ocrResponse = await fetch("https://api.ocr.space/parse/image", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "apikey": (apiKey || "").trim(),
+          },
+          body: formData.toString(),
+          signal: controller.signal,
+        });
 
-    clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-    if (!ocrResponse.ok) {
-      const errText = await ocrResponse.text();
-      return res.status(ocrResponse.status).json({
-        success: false,
-        error: `OCR.space API error HTTP ${ocrResponse.status}: ${errText.substring(0, 300)}`,
-      });
+        const responseText = await ocrResponse.text();
+        const isHtml = responseText.trim().startsWith("<") || responseText.includes("<!DOCTYPE") || responseText.includes("<html");
+
+        if (!isHtml) {
+          try {
+            const data = JSON.parse(responseText);
+            if (ocrResponse.ok && data && data.OCRExitCode === 1 && !data.IsErroredOnProcessing) {
+              return res.json({ success: true, data, source: "ocr_space" });
+            }
+            console.warn("OCR.space response contained error or throttling notice:", data?.ErrorMessage || data?.error);
+          } catch {
+            console.warn("OCR.space response was not valid JSON despite no HTML tags.");
+          }
+        } else {
+          console.warn("OCR.space returned an HTML page (likely Cloudflare, gateway error, or rate limit) instead of JSON.");
+        }
+      } catch (ocrErr: any) {
+        console.warn("OCR.space network or timeout error, falling back to server Gemini Vision:", ocrErr.message || ocrErr);
+      }
     }
 
-    const data = await ocrResponse.json();
-    return res.json({ success: true, data });
-  } catch (err: any) {
-    console.error("OCR.space proxy error:", err);
-    return res.status(500).json({
+    // Tier 2: Server-side Gemini Vision OCR Fallback
+    const ai = getGenAIClient();
+    if (ai) {
+      try {
+        let mimeType = "image/png";
+        let base64Data = imageBase64;
+        const match = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          mimeType = match[1];
+          base64Data = match[2];
+        }
+
+        const prompt = `Anda adalah sistem OCR presisi untuk tabel server Cinema XXI (Arts Alliance Media / TMS).
+TUGAS: Transkripsi setiap baris teks pada tabel ini.
+Untuk setiap baris yang terbaca, ekstrak teks baris lengkap dan posisinya.
+Kembalikan HANYA format JSON valid berikut:
+{
+  "lines": [
+    {
+      "text": "Teks lengkap baris",
+      "y": 140,
+      "words": [
+        { "text": "kata", "x": 100, "y": 140, "width": 80, "height": 24 }
+      ]
+    }
+  ],
+  "fullText": "Semua baris dipisahkan baris baru"
+}`;
+
+        const geminiRes = await callGeminiVision(ai, prompt, mimeType, base64Data, {
+          responseMimeType: "application/json",
+          temperature: 0.1,
+          maxOutputTokens: 8192
+        });
+
+        const text = geminiRes.text || "";
+        let parsedAi: any = null;
+        try {
+          parsedAi = JSON.parse(text);
+        } catch {
+          const matchObj = text.match(/\{[\s\S]*\}/);
+          if (matchObj) parsedAi = JSON.parse(matchObj[0]);
+        }
+
+        if (parsedAi && (Array.isArray(parsedAi.lines) || parsedAi.fullText)) {
+          const rawLines = Array.isArray(parsedAi.lines) ? parsedAi.lines : [];
+          const ocrLines = rawLines.map((l: any) => ({
+            Words: (Array.isArray(l.words) ? l.words : [{ text: l.text || '', x: 100, y: l.y || 100, width: 200, height: 24 }]).map((w: any) => ({
+              WordText: String(w.text || '').trim(),
+              Left: Number(w.x || 100),
+              Top: Number(w.y || l.y || 100),
+              Width: Math.max(10, Number(w.width || 80)),
+              Height: Math.max(12, Number(w.height || 24))
+            })).filter((w: any) => w.WordText.length > 0),
+            MaxHeight: 28,
+            MinTop: Number(l.y || 100)
+          })).filter((l: any) => l.Words.length > 0);
+
+          const fullText = parsedAi.fullText || rawLines.map((l: any) => l.text || '').join('\n');
+
+          return res.json({
+            success: true,
+            source: "gemini_vision_ocr",
+            data: {
+              ParsedResults: [
+                {
+                  TextOverlay: {
+                    Lines: ocrLines,
+                    HasOverlay: ocrLines.length > 0
+                  },
+                  ParsedText: fullText
+                }
+              ],
+              OCRExitCode: 1,
+              IsErroredOnProcessing: false
+            }
+          });
+        }
+      } catch (geminiErr: any) {
+        console.warn("Gemini Vision OCR fallback failed:", geminiErr.message || geminiErr);
+      }
+    }
+
+    // Tier 3: Tell browser client to run local Tesseract OCR fallback
+    // Always return HTTP 200 with clean JSON to prevent proxy HTML error interception
+    return res.status(200).json({
       success: false,
-      error: err.name === "AbortError" ? "OCR.space request timed out (45s)" : err.message || "Failed to process OCR.space request",
+      error: "Layanan OCR remote tidak tersedia, beralih ke OCR lokal browser.",
+      needsLocalFallback: true
+    });
+  } catch (err: any) {
+    console.error("OCR.space proxy handler error:", err);
+    return res.status(200).json({
+      success: false,
+      error: err.message || "Failed to process OCR request",
+      needsLocalFallback: true
     });
   }
 });
@@ -793,101 +992,6 @@ Jangan tambahkan teks pembuka atau markdown di luar blok json.`;
     });
   }
 });
-
-// Candidate multimodal models in order of priority to guard against 404 deprecations or temporary 503 load spikes
-// gemini-3.6-flash is the primary active model with verified multimodal support; gemini-flash-latest and gemini-3.8-flash provide backup pools
-const GEMINI_CANDIDATE_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-flash-latest",
-  "gemini-3.8-flash"
-];
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function callGeminiVision(
-  ai: GoogleGenAI,
-  prompt: string,
-  mimeType: string,
-  base64Data: string,
-  options: { responseMimeType?: string; temperature?: number; maxOutputTokens?: number } = {}
-) {
-  let lastErr: any = null;
-
-  for (const model of GEMINI_CANDIDATE_MODELS) {
-    const maxRetries = 2;
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const config: any = {
-          temperature: options.temperature ?? 0.1,
-          maxOutputTokens: options.maxOutputTokens ?? 8192
-        };
-        if (options.responseMimeType) {
-          config.responseMimeType = options.responseMimeType;
-        }
-        const res = await ai.models.generateContent({
-          model,
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType, data: base64Data } }
-              ]
-            }
-          ],
-          config
-        });
-        if (res && res.text) {
-          return { text: res.text, model };
-        }
-      } catch (err: any) {
-        lastErr = err;
-        const status = err?.status || err?.code || err?.error?.code || 0;
-        const msg = (err?.message || "").toLowerCase();
-        const errJsonStr = JSON.stringify(err || {}).toLowerCase();
-
-        // If quota exceeded (429 RESOURCE_EXHAUSTED), do NOT retry this model. Jump directly to next model!
-        const isQuotaExceeded =
-          status === 429 ||
-          err?.status === "RESOURCE_EXHAUSTED" ||
-          err?.error?.status === "RESOURCE_EXHAUSTED" ||
-          msg.includes("quota") ||
-          msg.includes("resource_exhausted") ||
-          errJsonStr.includes("quota") ||
-          errJsonStr.includes("resource_exhausted");
-
-        if (isQuotaExceeded) {
-          console.log(`[Gemini Vision] Model ${model} quota exhausted (429), switching to next model...`);
-          break; // Move immediately to next candidate model
-        }
-
-        const isTransient503 =
-          status === 503 ||
-          err?.status === "UNAVAILABLE" ||
-          err?.error?.status === "UNAVAILABLE" ||
-          msg.includes("503") ||
-          msg.includes("high demand") ||
-          msg.includes("unavailable") ||
-          errJsonStr.includes("503") ||
-          errJsonStr.includes("unavailable") ||
-          errJsonStr.includes("high demand");
-
-        if (isTransient503 && attempt < maxRetries) {
-          // Exponential backoff with jitter
-          const waitTime = Math.min(1000 * Math.pow(1.5, attempt) + Math.floor(Math.random() * 500), 5000);
-          console.log(`[Gemini Vision] Model ${model} temporarily busy (${status || '503'}), retrying in ${Math.round(waitTime)}ms (attempt ${attempt + 1}/${maxRetries})...`);
-          await sleep(waitTime);
-          continue;
-        }
-
-        console.log(`[Gemini Vision] Model ${model} unavailable (${status || err.message}), trying next candidate model...`);
-        break; // Move to next candidate model
-      }
-    }
-  }
-
-  throw lastErr;
-}
 
 // Server-side CPL Parser for Cinema XXI
 function parseCplContentServer(content: string) {

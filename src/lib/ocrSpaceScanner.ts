@@ -23,6 +23,7 @@ import {
   matchToMasterFilm,
   loadImage
 } from './smartFilmScanner';
+import { getOcrWorker } from './screenshotScanner';
 
 export interface OcrSpaceWord {
   WordText: string;
@@ -221,7 +222,7 @@ export function preprocessForOcrSpace(
 }
 
 /**
- * Calls backend OCR.space proxy (/api/ocr-space)
+ * Calls backend OCR.space proxy (/api/ocr-space) with robust non-JSON protection
  */
 export async function callOcrSpaceApi(
   dataUrl: string,
@@ -229,31 +230,92 @@ export async function callOcrSpaceApi(
 ): Promise<OcrSpaceApiResponse> {
   onProgress?.(30, 'MENGIRIM SCREENSHOT KE SERVER OCR.SPACE...');
 
-  const response = await fetch('/api/ocr-space', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      imageBase64: dataUrl,
-      language: 'eng',
-      isOverlayRequired: true,
-      isTable: true,
-      OCREngine: '2'
-    })
-  });
-
-  if (!response.ok) {
-    const errJson = await response.json().catch(() => ({}));
-    throw new Error(errJson.error || `Gagal menghubungi service OCR.space (HTTP ${response.status})`);
+  let response: Response;
+  try {
+    response = await fetch('/api/ocr-space', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        imageBase64: dataUrl,
+        language: 'eng',
+        isOverlayRequired: true,
+        isTable: true,
+        OCREngine: '2'
+      })
+    });
+  } catch (netErr: any) {
+    throw new Error(`Koneksi ke endpoint OCR gagal: ${netErr.message || netErr}`);
   }
 
-  const result = await response.json();
-  if (!result.success || !result.data) {
-    throw new Error(result.error || 'Response dari OCR.space tidak valid');
+  // Safely read response text without assuming JSON
+  const rawText = await response.text();
+  let result: any = null;
+
+  if (rawText && !rawText.trim().startsWith('<')) {
+    try {
+      result = JSON.parse(rawText);
+    } catch {
+      result = null;
+    }
+  }
+
+  if (!result) {
+    throw new Error(`Respons server bukan format JSON (HTTP ${response.status})`);
+  }
+
+  if (!response.ok || !result.success || !result.data) {
+    throw new Error(result.error || `Gagal menghubungi service OCR.space (HTTP ${response.status})`);
   }
 
   return result.data as OcrSpaceApiResponse;
+}
+
+/**
+ * High-reliability browser-side fallback OCR using Tesseract.js
+ * Used whenever OCR.space is throttled, offline, or returns HTML.
+ */
+export async function runLocalTesseractFallback(
+  canvas: HTMLCanvasElement,
+  onProgress?: (percent: number, stepText: string) => void
+): Promise<OcrSpaceApiResponse> {
+  onProgress?.(45, 'MEMUAT ENGINE OCR BROWSER (TESSERACT CADANGAN)...');
+  const worker = await getOcrWorker();
+
+  onProgress?.(55, 'MEMINDAI TEKS CPL SECARA LOKAL DENGAN TESSERACT...');
+  const res = await worker.recognize(canvas);
+
+  const rawLines = (res.data as any).lines || [];
+  const ocrLines: OcrSpaceLine[] = rawLines
+    .map((l: any) => ({
+      Words: (l.words || [])
+        .map((w: any) => ({
+          WordText: (w.text || '').trim(),
+          Left: w.bbox?.x0 ?? 0,
+          Top: w.bbox?.y0 ?? 0,
+          Width: Math.max(10, (w.bbox?.x1 ?? 0) - (w.bbox?.x0 ?? 0)),
+          Height: Math.max(10, (w.bbox?.y1 ?? 0) - (w.bbox?.y0 ?? 0))
+        }))
+        .filter((w: any) => w.WordText.length > 0),
+      MaxHeight: Math.max(14, (l.bbox?.y1 ?? 0) - (l.bbox?.y0 ?? 0)),
+      MinTop: l.bbox?.y0 ?? 0
+    }))
+    .filter((l: any) => l.Words.length > 0);
+
+  return {
+    ParsedResults: [
+      {
+        TextOverlay: {
+          Lines: ocrLines,
+          HasOverlay: ocrLines.length > 0
+        },
+        ParsedText: res.data.text || ''
+      }
+    ],
+    OCRExitCode: 1,
+    IsErroredOnProcessing: false
+  };
 }
 
 /**
@@ -440,46 +502,58 @@ export async function runOcrSpaceScreenshotScanner(
     const { dataUrl: preprocessedDataUrl, scale: ocrScale } = preprocessForOcrSpace(canvas);
 
     let ocrResponse: OcrSpaceApiResponse;
+    let effectiveScale = ocrScale;
     try {
       ocrResponse = await callOcrSpaceApi(preprocessedDataUrl, onProgress);
       lastRawOcrResponse = ocrResponse;
     } catch (err: any) {
-      console.error('OCR.space call failed:', err);
-      // Fallback jika API gagal: baris bertanda gembok disajikan untuk manual review tanpa placeholder
-      for (let lIdx = 0; lIdx < detectedLocks.length; lIdx++) {
-        const lock = detectedLocks[lIdx];
-        rawCandidates.push({
-          rawContentName: '',
-          canonicalTitle: 'PERLU DICOCOKKAN',
-          singkatan: '',
-          variantTag: '5.1',
-          formatSound: '5.1',
-          formatFilm: '2D Flat',
-          hasLock: true,
-          lockStatus: 'LOCK',
-          lockConfidence: lock.confidence || 75,
-          lockCropUrl: lock.cropUrl,
-          hasCheckbox: lock.hasCheckbox,
-          screenshotIndex: sNumber,
-          matchedFilm: null,
-          needsManual: true,
-          confidence: 'low'
-        });
-        debugRows.push({
-          rowNumber: debugRows.length + 1,
-          screenshotIndex: sNumber,
-          hasLock: true,
-          lockX: lock.x,
-          lockY: lock.centerY,
-          ocrText: '(API OCR.space Error)',
-          matchingConfidence: 'none',
-          status: 'PERLU DICOCOKKAN',
-          reason: err.message || 'Gagal koneksi OCR.space'
-        });
-        totalNeedsMatch++;
-        totalLockDetected++;
+      console.warn('OCR.space call failed, attempting local Tesseract fallback:', err.message || err);
+      try {
+        onProgress?.(
+          45 + Math.round((sIdx / screenshotDataUrls.length) * 10),
+          `BERALIH KE LOCAL OCR CADANGAN (Screenshot ${sNumber})...`
+        );
+        ocrResponse = await runLocalTesseractFallback(canvas, onProgress);
+        effectiveScale = 1.0;
+        lastRawOcrResponse = ocrResponse;
+      } catch (localErr: any) {
+        console.error('All OCR methods failed:', localErr);
+        // Fallback jika API & local OCR gagal: baris bertanda gembok disajikan untuk manual review
+        for (let lIdx = 0; lIdx < detectedLocks.length; lIdx++) {
+          const lock = detectedLocks[lIdx];
+          rawCandidates.push({
+            rawContentName: '',
+            canonicalTitle: 'PERLU DICOCOKKAN',
+            singkatan: '',
+            variantTag: '5.1',
+            formatSound: '5.1',
+            formatFilm: '2D Flat',
+            hasLock: true,
+            lockStatus: 'LOCK',
+            lockConfidence: lock.confidence || 75,
+            lockCropUrl: lock.cropUrl,
+            hasCheckbox: lock.hasCheckbox,
+            screenshotIndex: sNumber,
+            matchedFilm: null,
+            needsManual: true,
+            confidence: 'low'
+          });
+          debugRows.push({
+            rowNumber: debugRows.length + 1,
+            screenshotIndex: sNumber,
+            hasLock: true,
+            lockX: lock.x,
+            lockY: lock.centerY,
+            ocrText: '(OCR Engine Error)',
+            matchingConfidence: 'none',
+            status: 'PERLU DICOCOKKAN',
+            reason: localErr.message || err.message || 'Gagal memproses OCR'
+          });
+          totalNeedsMatch++;
+          totalLockDetected++;
+        }
+        continue;
       }
-      continue;
     }
 
     // STEP 3: SEMUA TEXT + KOORDINAT DARI OCR.SPACE
@@ -493,10 +567,10 @@ export async function runOcrSpaceScreenshotScanner(
         for (const w of line.Words) {
           const wText = w.WordText.trim();
           if (!wText) continue;
-          const left = Math.round(w.Left / ocrScale);
-          const top = Math.round(w.Top / ocrScale);
-          const wWidth = Math.round(w.Width / ocrScale);
-          const wHeight = Math.round(w.Height / ocrScale);
+          const left = Math.round(w.Left / effectiveScale);
+          const top = Math.round(w.Top / effectiveScale);
+          const wWidth = Math.round(w.Width / effectiveScale);
+          const wHeight = Math.round(w.Height / effectiveScale);
           allNormalizedWords.push({
             text: wText,
             left,

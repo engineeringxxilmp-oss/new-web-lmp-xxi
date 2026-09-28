@@ -103,7 +103,7 @@ class FirestoreDatabase {
           const films = parsed.films || [];
           const isMockDump =
             (films.length === 34 && films.every((f: any) => f.id?.startsWith('flm-'))) ||
-            (films.length <= 4 && films.every((f: any) => f.id?.startsWith('film-')) && !parsed.is_imported);
+            (films.length <= 4 && films.every((f: any) => f.id?.startsWith('film-')) && !parsed.is_imported && (r.id?.startsWith('wr-mock') || r.id?.startsWith('rep-mock')));
           return !isMockDump;
         } catch {
           return true;
@@ -878,8 +878,9 @@ class FirestoreDatabase {
     const id = report.id || `wr-${Date.now()}`;
     const payload = { ...report, id };
 
+    const norm = (p: string) => (p || '').replace(/\s*(?:[-–—]|s\/d|sd|sampai)\s*/gi, ' - ').trim().toLowerCase();
     const index = this.weeklyReports.findIndex(
-      (item) => item.id === id || item.periode === report.periode
+      (item) => item.id === id || (item.periode && report.periode && norm(item.periode) === norm(report.periode))
     );
     if (index > -1) {
       this.weeklyReports[index] = payload;

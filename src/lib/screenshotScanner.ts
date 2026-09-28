@@ -21,7 +21,7 @@ export interface DetectedScanRow {
 let cachedWorker: Worker | null = null;
 let workerInitPromise: Promise<Worker> | null = null;
 
-async function getOcrWorker(): Promise<Worker> {
+export async function getOcrWorker(): Promise<Worker> {
   if (cachedWorker) return cachedWorker;
   if (workerInitPromise) return workerInitPromise;
 
