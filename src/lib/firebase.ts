@@ -4,7 +4,14 @@
  */
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  getFirestore,
+  doc,
+  getDocFromServer,
+  persistentLocalCache,
+  persistentMultipleTabManager
+} from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 import fileConfig from '../../firebase-applet-config.json';
 
@@ -21,7 +28,27 @@ export const firebaseConfig = {
 };
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const firestore = getFirestore(app);
+
+// Initialize Firestore with long-polling and multi-tab local cache for robust container and offline operation
+function initFirestoreInstance() {
+  const dbId = (fileConfig as any).firestoreDatabaseId;
+  try {
+    return initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    }, dbId);
+  } catch {
+    try {
+      return initializeFirestore(app, {
+        experimentalForceLongPolling: true,
+      }, dbId);
+    } catch {
+      return getFirestore(app, dbId);
+    }
+  }
+}
+
+export const firestore = initFirestoreInstance();
 export const auth = getAuth(app);
 
 // Authenticate anonymously in background if not logged in, ensuring Firestore operations succeed

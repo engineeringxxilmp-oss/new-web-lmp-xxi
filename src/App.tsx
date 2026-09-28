@@ -39,6 +39,7 @@ import RiwayatEquipmentView from './views/RiwayatEquipment';
 import ReportHistoryView from './views/ReportHistoryView';
 import BeritaAcaraPermintaanView from './views/BeritaAcaraPermintaanView';
 import SopKnowledgeCenter from './views/SopKnowledgeCenter';
+import FormCutiView from './views/FormCutiView';
 import FilmUploadView from './views/FilmUploadView';
 import LaporanFilm from './views/LaporanFilm';
 import RapotFilm from './views/RapotFilm';
@@ -439,6 +440,14 @@ export default function App() {
             onSelectTab={(tab) => setActiveTab(tab)}
           />
         );
+      case 'form-cuti':
+        return (
+          <FormCutiView
+            branding={branding}
+            currentUser={currentUser}
+            onShowToast={triggerToast}
+          />
+        );
       case 'master-area':
         return (
           <MasterArea
@@ -623,6 +632,7 @@ export default function App() {
   const getActiveTabTitle = (tab: string) => {
     switch (tab) {
       case 'dashboard': return 'Dashboard';
+      case 'form-cuti': return 'Form Cuti';
       case 'master-area': return 'Master Area';
       case 'ip-credential-manager': return 'IP & Login';
       case 'equipment': return 'List Peralatan';
@@ -736,6 +746,7 @@ export default function App() {
                     activeTab === 'barang-datang' ? '🚚 Log Barang Datang' :
                     activeTab === 'riwayat-equipment' ? '📜 Riwayat Maintenance' :
                     activeTab === 'report-history' ? '📄 Form History Pergantian Unit / Sparepart' :
+                    activeTab === 'berita-acara-permintaan' ? '📝 Berita Acara Permintaan Barang' :
                     activeTab === 'film-upload' ? '🎞️ Log Film' :
                     '⚙️ Menu System'
                   }

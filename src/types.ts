@@ -1152,6 +1152,74 @@ export const INITIAL_REPORT_HISTORIES: ReportHistoryItem[] = [
   }
 ];
 
+export type JenisCutiType =
+  | 'Cuti Tahunan'
+  | 'Menikah'
+  | 'Menikahkan Anak'
+  | 'Khitanan Anak'
+  | 'Baptisan Anak'
+  | 'Istri Melahirkan / Keguguran'
+  | 'Suami/Istri, Orangtua/Mertua atau Menantu Meninggal'
+  | 'Anggota keluarga dalam 1 rumah meninggal dunia';
+
+export interface FormCutiData {
+  id: string;
+  // I. DATA PEGAWAI
+  nama: string;
+  divisi: string;
+  jabatan: string;
+  nik: string;
+  noHp: string;
+
+  // II. RENCANA CUTI
+  tanggalMulai: string; // YYYY-MM-DD
+  tanggalSelesai: string; // YYYY-MM-DD
+  jumlahHari: number;
+
+  // III. BEKERJA KEMBALI
+  tanggalKembali: string; // YYYY-MM-DD
+
+  // IV. JENIS CUTI
+  jenisCuti: JenisCutiType | string;
+
+  // V. ALASAN CUTI
+  alasanCuti: string;
+
+  // VI. PEJABAT PENGGANTI SELAMA CUTI
+  penggantiNama: string;
+  penggantiNoHp: string;
+
+  // VII. BAGIAN PARAF / PERSETUJUAN
+  diajukanOlehNama: string;
+  diajukanOlehJabatan: string;
+  diajukanOlehTanggal: string;
+
+  disetujuiOlehNama: string;
+  disetujuiOlehJabatan: string;
+  disetujuiOlehTanggal: string;
+
+  mengetahuiNama: string;
+  mengetahuiJabatan: string;
+  mengetahuiTanggal: string;
+
+  // VIII. HUMAN CAPITAL (1. DATA CUTI & 2. HASIL VERIFIKASI DATA CUTI KARYAWAN)
+  hcHakCutiTahun: string;
+  hcHakCutiHari: string;
+  hcCutiTelahDiambil: string;
+  hcCutiAkanDiambil: string;
+  hcIzin?: string;
+  hcAlpa?: string;
+  hcSakit?: string;
+  hcSisaCuti: string;
+  hcStatusVerifikasi?: 'Dapat Diproses' | 'Tidak Dapat Diproses' | '';
+  hcCatatan: string;
+  hcParafNama: string;
+  hcParafTanggal: string;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
 
 
 

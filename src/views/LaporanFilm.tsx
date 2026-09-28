@@ -1754,7 +1754,7 @@ Operator Proyeksi / Engineering XXI LMP`;
       )}
 
       {/* Upper header section */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-[#0d1322]/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/25 shadow-[0_0_20px_rgba(0,240,255,0.05)]">
+      <div className="flex flex-col gap-5 bg-[#0d1322]/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/25 shadow-[0_0_20px_rgba(0,240,255,0.05)]">
         <div>
           <h2 className="text-2xl font-black text-white tracking-tight font-sans flex items-center gap-2.5 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
             <FileText className="h-6 w-6 text-fuchsia-400 drop-shadow-[0_0_8px_#e879f9]" />
@@ -1765,65 +1765,67 @@ Operator Proyeksi / Engineering XXI LMP`;
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 w-full xl:w-auto shrink-0">
-          {/* Flexible Date Picker & Presets */}
-          <div className="flex flex-wrap items-center gap-2 bg-[#09101e] border border-cyan-500/25 p-2 rounded-xl">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 font-mono uppercase">Mulai:</span>
-              <input
-                type="date"
-                value={startDateInput}
-                onChange={(e) => handleDateRangeChange(e.target.value, endDateInput)}
-                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs font-mono focus:border-cyan-400 focus:outline-none cursor-pointer"
-                title="Tanggal Mulai Laporan"
-              />
+        {/* Toolbar Controls Container */}
+        <div className="flex flex-col gap-4">
+          {/* Baris 1: Date Range Picker & Periode Arsip Selector */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-[#09101e] border border-cyan-500/25 rounded-2xl">
+            {/* Range Date Picker & Presets */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-300 font-mono uppercase tracking-wider">Mulai:</span>
+                <input
+                  type="date"
+                  value={startDateInput}
+                  onChange={(e) => handleDateRangeChange(e.target.value, endDateInput)}
+                  className="bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-1.5 text-xs sm:text-sm font-mono focus:border-cyan-400 focus:outline-none cursor-pointer"
+                  title="Tanggal Mulai Laporan"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-300 font-mono uppercase tracking-wider">Sampai:</span>
+                <input
+                  type="date"
+                  value={endDateInput}
+                  onChange={(e) => handleDateRangeChange(startDateInput, e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-1.5 text-xs sm:text-sm font-mono focus:border-cyan-400 focus:outline-none cursor-pointer"
+                  title="Tanggal Akhir Laporan"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 pl-1">
+                <button
+                  type="button"
+                  onClick={setPresetToday}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-200 text-xs sm:text-sm font-mono font-bold transition cursor-pointer"
+                  title="Laporan 1 Hari (Hari Ini)"
+                >
+                  1 Hari
+                </button>
+                <button
+                  type="button"
+                  onClick={setPresetThisWeek}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-200 text-xs sm:text-sm font-mono font-bold transition cursor-pointer"
+                  title="Laporan 1 Minggu (Senin - Minggu)"
+                >
+                  Mingguan
+                </button>
+                <button
+                  type="button"
+                  onClick={setPresetThisMonth}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-200 text-xs sm:text-sm font-mono font-bold transition cursor-pointer"
+                  title="Laporan 1 Bulan Penuh"
+                >
+                  Bulanan
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold text-slate-400 font-mono uppercase">Sampai:</span>
-              <input
-                type="date"
-                value={endDateInput}
-                onChange={(e) => handleDateRangeChange(startDateInput, e.target.value)}
-                className="bg-slate-900 border border-slate-700 text-white rounded-lg px-2 py-1 text-xs font-mono focus:border-cyan-400 focus:outline-none cursor-pointer"
-                title="Tanggal Akhir Laporan"
-              />
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={setPresetToday}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-300 text-[10px] font-mono font-bold transition cursor-pointer"
-                title="Laporan 1 Hari (Hari Ini)"
-              >
-                1 Hari
-              </button>
-              <button
-                type="button"
-                onClick={setPresetThisWeek}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-300 text-[10px] font-mono font-bold transition cursor-pointer"
-                title="Laporan 1 Minggu (Senin - Minggu)"
-              >
-                Mingguan
-              </button>
-              <button
-                type="button"
-                onClick={setPresetThisMonth}
-                className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-900 hover:text-cyan-200 text-slate-300 text-[10px] font-mono font-bold transition cursor-pointer"
-                title="Laporan 1 Bulan Penuh"
-              >
-                Bulanan
-              </button>
-            </div>
-          </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Week Selector Dropdown for Saved Reports */}
-            <div className="flex items-center gap-2 flex-1 sm:flex-initial">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono whitespace-nowrap hidden sm:inline">ARSIP PERIODE:</span>
+            {/* Arsip Periode Dropdown */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono whitespace-nowrap">ARSIP PERIODE:</span>
               <select
                 value={selectedWeek}
                 onChange={(e) => setSelectedWeek(e.target.value)}
-                className="flex-1 sm:flex-initial bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold font-mono focus:outline-none focus:border-cyan-400 transition-colors cursor-pointer"
+                className="flex-1 sm:flex-initial bg-slate-900 border border-slate-700 text-white rounded-xl px-3.5 py-1.5 text-xs sm:text-sm font-bold font-mono focus:outline-none focus:border-cyan-400 transition-colors cursor-pointer"
                 id="select-period-week"
               >
                 {weekRanges.length === 0 ? (
@@ -1835,90 +1837,99 @@ Operator Proyeksi / Engineering XXI LMP`;
                 )}
               </select>
             </div>
+          </div>
 
-            <button
-              onClick={handleGenerateReport}
-              disabled={!selectedWeek || reportFilms.length === 0}
-              className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 text-xs font-bold text-black hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-              id="btn-generate-report"
-            >
-              <RefreshCw className="h-4 w-4" /> {activeReport && reportFilms.length > 0 ? 'Generate Ulang' : 'Generate Laporan'}
-            </button>
-          
-          <button
-            onClick={() => setShowPreview(!showPreview)}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
-              showPreview
-                ? 'bg-cyan-600 border-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-                : 'bg-zinc-800/80 border-zinc-700 text-zinc-300'
-            }`}
-            id="btn-preview-report"
-          >
-            <Eye className="h-4 w-4" /> Preview
-          </button>
+          {/* Baris 2: Action Buttons Grouped & Consistent */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Group 1: Generate & Cetak Tools */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={handleGenerateReport}
+                disabled={!selectedWeek || reportFilms.length === 0}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-yellow-500 px-4 py-2.5 text-xs sm:text-sm font-bold text-black hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)] disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer whitespace-nowrap"
+                id="btn-generate-report"
+              >
+                <RefreshCw className="h-4 w-4" /> {activeReport && reportFilms.length > 0 ? 'Generate Ulang' : 'Generate Laporan'}
+              </button>
 
-          <button
-            onClick={handleOpenConfig}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-black transition-all cursor-pointer ${
-              showConfig
-                ? 'bg-amber-400 text-slate-950 shadow-[0_0_25px_rgba(251,191,36,0.6)] border-2 border-amber-300'
-                : 'bg-gradient-to-r from-amber-500/20 via-yellow-500/30 to-amber-500/20 text-yellow-300 hover:text-white hover:bg-yellow-500/40 border-2 border-yellow-400/80 shadow-[0_0_20px_rgba(234,179,8,0.35)] hover:shadow-[0_0_28px_rgba(234,179,8,0.6)] ring-1 ring-yellow-400/40'
-            }`}
-            id="btn-config-report"
-          >
-            <Sparkles className="h-4 w-4 text-yellow-400 animate-pulse" />
-            <span>KONFIGURASI CETAK ✨</span>
-          </button>
+              <button
+                onClick={() => setShowPreview(!showPreview)}
+                className={`min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
+                  showPreview
+                    ? 'bg-cyan-600 border-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                    : 'bg-zinc-800/80 border-zinc-700 text-zinc-300 hover:text-white'
+                }`}
+                id="btn-preview-report"
+              >
+                <Eye className="h-4 w-4" /> Preview
+              </button>
 
-          <button
-            onClick={handleExportPdf}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-emerald-600 border border-emerald-500 hover:bg-emerald-500 text-white px-4 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.3)]"
-            id="btn-pdf-report"
-          >
-            <Download className="h-4 w-4 text-white animate-bounce-slow" /> Download PDF
-          </button>
+              <button
+                onClick={handleOpenConfig}
+                className={`min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-black transition-all cursor-pointer whitespace-nowrap ${
+                  showConfig
+                    ? 'bg-amber-400 text-slate-950 shadow-[0_0_25px_rgba(251,191,36,0.6)] border-2 border-amber-300'
+                    : 'bg-gradient-to-r from-amber-500/20 via-yellow-500/30 to-amber-500/20 text-yellow-300 hover:text-white hover:bg-yellow-500/40 border-2 border-yellow-400/80 shadow-[0_0_20px_rgba(234,179,8,0.35)] hover:shadow-[0_0_28px_rgba(234,179,8,0.6)] ring-1 ring-yellow-400/40'
+                }`}
+                id="btn-config-report"
+              >
+                <Sparkles className="h-4 w-4 text-yellow-400 animate-pulse" />
+                <span>KONFIGURASI CETAK ✨</span>
+              </button>
+            </div>
 
-          <button
-            onClick={handleShareWhatsApp}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-emerald-700/80 border border-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)]"
-            id="btn-share-whatsapp"
-            title="Share WhatsApp ke Manager"
-          >
-            <Share2 className="h-4 w-4 text-emerald-300" /> Share WhatsApp
-          </button>
+            {/* Group 2: Export & Sharing Actions */}
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={handleExportPdf}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 border border-emerald-500 hover:bg-emerald-500 text-white px-4 py-2.5 text-xs sm:text-sm font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] whitespace-nowrap"
+                id="btn-pdf-report"
+              >
+                <Download className="h-4 w-4 text-white animate-bounce-slow" /> Download PDF
+              </button>
 
-          <button
-            onClick={handleUploadToDrive}
-            disabled={isUploadingDrive}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-cyan-700/80 border border-cyan-500 hover:bg-cyan-600 text-white px-3.5 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.2)]"
-            id="btn-upload-drive"
-            title="Unggah ke Google Drive (Laporan Film/Bulan Tahun)"
-          >
-            <UploadCloud className="h-4 w-4 text-cyan-300" />
-            <span>{isUploadingDrive ? 'Mengunggah...' : 'Unggah ke Drive'}</span>
-          </button>
+              <button
+                onClick={handleShareWhatsApp}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700/80 border border-emerald-500 hover:bg-emerald-600 text-white px-4 py-2.5 text-xs sm:text-sm font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.2)] whitespace-nowrap"
+                id="btn-share-whatsapp"
+                title="Share WhatsApp ke Manager"
+              >
+                <Share2 className="h-4 w-4 text-emerald-300" /> Share WhatsApp
+              </button>
 
-          <button
-            onClick={handleSendGmail}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-red-900/70 border border-red-500/50 hover:bg-red-800 text-white px-3.5 py-2.5 text-xs font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.2)]"
-            id="btn-send-gmail"
-            title="Kirim Laporan via Gmail"
-          >
-            <Mail className="h-4 w-4 text-red-300" /> Kirim Gmail
-          </button>
+              <button
+                onClick={handleUploadToDrive}
+                disabled={isUploadingDrive}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-700/80 border border-cyan-500 hover:bg-cyan-600 text-white px-4 py-2.5 text-xs sm:text-sm font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.2)] whitespace-nowrap"
+                id="btn-upload-drive"
+                title="Unggah ke Google Drive (Laporan Film/Bulan Tahun)"
+              >
+                <UploadCloud className="h-4 w-4 text-cyan-300" />
+                <span>{isUploadingDrive ? 'Mengunggah...' : 'Unggah ke Drive'}</span>
+              </button>
 
-          {activeReport && reportFilms.length > 0 && (
-            <button
-              onClick={() => handleDeleteReport(activeReport.id)}
-              className="sm:flex-initial p-2.5 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 transition-colors cursor-pointer"
-              title="Hapus Data Laporan Film Periode Ini (Kembali Kosong)"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
+              <button
+                onClick={handleSendGmail}
+                className="min-h-[42px] inline-flex items-center justify-center gap-2 rounded-xl bg-red-900/70 border border-red-500/50 hover:bg-red-800 text-white px-4 py-2.5 text-xs sm:text-sm font-bold transition-all disabled:opacity-40 disabled:pointer-events-none cursor-pointer shadow-[0_0_15px_rgba(239,68,68,0.2)] whitespace-nowrap"
+                id="btn-send-gmail"
+                title="Kirim Laporan via Gmail"
+              >
+                <Mail className="h-4 w-4 text-red-300" /> Kirim Gmail
+              </button>
+
+              {activeReport && reportFilms.length > 0 && (
+                <button
+                  onClick={() => handleDeleteReport(activeReport.id)}
+                  className="min-h-[42px] min-w-[42px] inline-flex items-center justify-center p-2.5 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:border-rose-500 transition-colors cursor-pointer"
+                  title="Hapus Data Laporan Film Periode Ini (Kembali Kosong)"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
       {/* Real-time Data Changed Warning Badge */}
       {activeReport && isDataChanged && (
@@ -2126,10 +2137,10 @@ Operator Proyeksi / Engineering XXI LMP`;
         {!isLoading && (
           <>
             {/* Filter Panel for Report Table View */}
-            <div className="bg-[#0c121a]/60 border border-zinc-800 p-4 rounded-xl space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono flex items-center gap-1.5">
-                  <Filter className="w-3.5 h-3.5 text-yellow-500" /> Filter Tampilan Tabel & Cetak PDF
+            <div className="bg-[#0c121a]/80 border border-zinc-800 p-4 rounded-2xl space-y-3.5 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-1">
+                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider font-mono flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-yellow-500" /> Filter Tampilan Tabel &amp; Cetak PDF
                 </span>
                 {(reportSearchQuery || reportFilterFormat !== 'ALL' || reportFilterStatusTayang !== 'ALL' || reportFilterStatusKdm !== 'ALL') && (
                   <button
@@ -2139,23 +2150,23 @@ Operator Proyeksi / Engineering XXI LMP`;
                       setReportFilterStatusTayang('ALL');
                       setReportFilterStatusKdm('ALL');
                     }}
-                    className="text-[10px] font-bold text-yellow-500 hover:text-yellow-400 transition-colors uppercase tracking-wider font-mono cursor-pointer self-start sm:self-auto"
+                    className="text-xs font-bold text-yellow-500 hover:text-yellow-400 transition-colors uppercase tracking-wider font-mono cursor-pointer self-start sm:self-auto"
                   >
                     Reset Filter
                   </button>
                 )}
               </div>
               
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                 {/* Search Input */}
                 <div className="relative">
-                  <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-400" />
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400 pointer-events-none" />
                   <input
                     type="text"
                     placeholder="Cari judul film..."
                     value={reportSearchQuery}
                     onChange={(e) => setReportSearchQuery(e.target.value)}
-                    className="w-full bg-[#040608]/90 border border-zinc-700 rounded-xl pl-9 pr-3 py-2 text-xs font-semibold text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-500 transition-colors"
+                    className="w-full h-11 bg-[#040608]/90 border border-zinc-700 rounded-xl pl-10 pr-3.5 text-xs sm:text-sm font-semibold text-white placeholder-zinc-500 focus:outline-none focus:border-yellow-500 transition-colors"
                   />
                 </div>
 
@@ -2164,7 +2175,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                   <select
                     value={reportFilterFormat}
                     onChange={(e) => setReportFilterFormat(e.target.value)}
-                    className="w-full bg-[#040608]/90 border border-zinc-700 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-yellow-500 transition-colors"
+                    className="w-full h-11 bg-[#040608]/90 border border-zinc-700 text-white rounded-xl px-3.5 text-xs sm:text-sm font-bold focus:outline-none focus:border-yellow-500 transition-colors cursor-pointer"
                   >
                     <option value="ALL">Format: Semua</option>
                     <option value="2D">Format: 2D Only</option>
@@ -2179,7 +2190,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                   <select
                     value={reportFilterStatusTayang}
                     onChange={(e) => setReportFilterStatusTayang(e.target.value)}
-                    className="w-full bg-[#040608]/90 border border-zinc-700 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-yellow-500 transition-colors"
+                    className="w-full h-11 bg-[#040608]/90 border border-zinc-700 text-white rounded-xl px-3.5 text-xs sm:text-sm font-bold focus:outline-none focus:border-yellow-500 transition-colors cursor-pointer"
                   >
                     <option value="ALL">Status: Semua</option>
                     <option value="BELUM TAYANG">Status: Belum Tayang</option>
@@ -2193,7 +2204,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                   <select
                     value={reportFilterStatusKdm}
                     onChange={(e) => setReportFilterStatusKdm(e.target.value)}
-                    className="w-full bg-[#040608]/90 border border-zinc-700 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-yellow-500 transition-colors"
+                    className="w-full h-11 bg-[#040608]/90 border border-zinc-700 text-white rounded-xl px-3.5 text-xs sm:text-sm font-bold focus:outline-none focus:border-yellow-500 transition-colors cursor-pointer"
                   >
                     <option value="ALL">KDM: Semua</option>
                     <option value="Aktif">KDM: Aktif</option>
@@ -2205,60 +2216,53 @@ Operator Proyeksi / Engineering XXI LMP`;
             </div>
 
             {/* Show dynamic report stats card bento */}
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-              <div className="bg-[#0c121a]/60 border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400 shrink-0">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+              <div className="bg-[#0c121a]/80 border border-zinc-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-blue-500/40 transition-all">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-400 mb-2">
                   <Layers className="w-4 h-4" />
                 </div>
-                <div>
-                  <p className="text-[9px] font-bold font-mono text-zinc-400 uppercase">TOTAL FILM</p>
-                  <p className="text-sm font-black text-white">{totalFilmCount}</p>
-                </div>
+                <p className="text-[11px] sm:text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">TOTAL FILM</p>
+                <p className="text-xl sm:text-2xl font-black text-white font-mono mt-1">{totalFilmCount}</p>
               </div>
-              <div className="bg-[#0c121a]/60 border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 shrink-0">
+
+              <div className="bg-[#0c121a]/80 border border-zinc-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-emerald-500/40 transition-all">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 mb-2">
                   <CheckCircle className="w-4 h-4" />
                 </div>
-                <div>
-                  <p className="text-[9px] font-bold font-mono text-zinc-400 uppercase">BERHASIL UPLOAD</p>
-                  <p className="text-sm font-black text-white text-emerald-400">{totalBerhasilUpload}</p>
-                </div>
+                <p className="text-[11px] sm:text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">BERHASIL UPLOAD</p>
+                <p className="text-xl sm:text-2xl font-black text-emerald-400 font-mono mt-1">{totalBerhasilUpload}</p>
               </div>
-              <div className="bg-[#0c121a]/60 border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400 shrink-0">
+
+              <div className="bg-[#0c121a]/80 border border-zinc-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-rose-500/40 transition-all">
+                <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 mb-2">
                   <AlertCircle className="w-4 h-4" />
                 </div>
-                <div>
-                  <p className="text-[9px] font-bold font-mono text-zinc-400 uppercase">GAGAL UPLOAD</p>
-                  <p className="text-sm font-black text-white text-rose-400">{totalGagalUpload}</p>
-                </div>
+                <p className="text-[11px] sm:text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">GAGAL UPLOAD</p>
+                <p className="text-xl sm:text-2xl font-black text-rose-400 font-mono mt-1">{totalGagalUpload}</p>
               </div>
-              <div className="bg-[#0c121a]/60 border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-yellow-500/10 text-yellow-400 shrink-0">
+
+              <div className="bg-[#0c121a]/80 border border-zinc-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-yellow-500/40 transition-all">
+                <div className="p-2 rounded-xl bg-yellow-500/10 text-yellow-400 mb-2">
                   <UserCheck className="w-4 h-4" />
                 </div>
-                <div>
-                  <p className="text-[9px] font-bold font-mono text-zinc-400 uppercase">KDM AKTIF</p>
-                  <p className="text-sm font-black text-white text-yellow-400">{totalKdmAktif}</p>
-                </div>
+                <p className="text-[11px] sm:text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">KDM AKTIF</p>
+                <p className="text-xl sm:text-2xl font-black text-yellow-400 font-mono mt-1">{totalKdmAktif}</p>
               </div>
-              <div className="bg-[#0c121a]/60 border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-orange-500/10 text-orange-400 shrink-0">
+
+              <div className="bg-[#0c121a]/80 border border-zinc-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-orange-500/40 transition-all">
+                <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400 mb-2">
                   <Clock className="w-4 h-4" />
                 </div>
-                <div>
-                  <p className="text-[9px] font-bold font-mono text-zinc-400 uppercase">KDM EXPIRED</p>
-                  <p className="text-sm font-black text-white text-orange-400">{totalKdmExpired}</p>
-                </div>
+                <p className="text-[11px] sm:text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">KDM EXPIRED</p>
+                <p className="text-xl sm:text-2xl font-black text-orange-400 font-mono mt-1">{totalKdmExpired}</p>
               </div>
-              <div className="bg-[#0c121a]/60 border border-zinc-800 p-3 rounded-xl flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0">
+
+              <div className="bg-[#0c121a]/80 border border-zinc-800 p-4 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm hover:border-indigo-500/40 transition-all">
+                <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-400 mb-2">
                   <FileCode className="w-4 h-4" />
                 </div>
-                <div>
-                  <p className="text-[9px] font-bold font-mono text-zinc-400 uppercase">TOTAL DCP</p>
-                  <p className="text-sm font-black text-white text-indigo-400">{totalDcpCount}</p>
-                </div>
+                <p className="text-[11px] sm:text-xs font-bold font-mono text-zinc-300 uppercase tracking-wider">TOTAL DCP</p>
+                <p className="text-xl sm:text-2xl font-black text-indigo-400 font-mono mt-1">{totalDcpCount}</p>
               </div>
             </div>
 
@@ -2285,7 +2289,7 @@ Operator Proyeksi / Engineering XXI LMP`;
               )}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
                 <div>
-                  <h3 className="text-base font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
+                  <h3 className="text-base md:text-lg font-black text-white uppercase tracking-wider font-mono flex items-center gap-2">
                     <FileText className="w-5 h-5 text-cyan-400" />
                     STATUS TAYANG &amp; STATUS KDM MANUAL (EDITABLE)
                   </h3>
@@ -2299,7 +2303,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                   <button
                     type="button"
                     onClick={handleSelectAllReportFilms}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold font-mono transition cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-bold font-mono transition cursor-pointer"
                     id="btn-select-all-laporan"
                   >
                     ☑ PILIH SEMUA
@@ -2307,7 +2311,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                   <button
                     type="button"
                     onClick={handleDeselectAllReportFilms}
-                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold font-mono transition cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-bold font-mono transition cursor-pointer"
                     id="btn-deselect-all-laporan"
                   >
                     ☐ LEPAS SEMUA
@@ -2316,19 +2320,19 @@ Operator Proyeksi / Engineering XXI LMP`;
                     <button
                       type="button"
                       onClick={handleBulkDeleteReportFilms}
-                      className="px-3.5 py-1.5 rounded-lg bg-rose-950 text-rose-300 border border-rose-500/50 hover:bg-rose-900 text-xs font-black font-mono transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-fade-in"
+                      className="px-4 py-2 rounded-xl bg-rose-950 text-rose-300 border border-rose-500/50 hover:bg-rose-900 text-xs sm:text-sm font-black font-mono transition flex items-center gap-1.5 cursor-pointer shadow-[0_0_10px_rgba(244,63,94,0.3)] animate-fade-in"
                       id="btn-bulk-delete-laporan"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                       HAPUS TERPILIH ({Object.values(selectedReportFilmIds).filter(Boolean).length})
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => setShowPreview(!showPreview)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 text-xs font-bold font-mono hover:bg-cyan-600/30 transition cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600/20 text-cyan-300 border border-cyan-500/40 text-xs sm:text-sm font-bold font-mono hover:bg-cyan-600/30 transition cursor-pointer"
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-4 h-4" />
                     {showPreview ? 'Sembunyikan Pratinjau Kertas' : 'Lihat Pratinjau Kertas PDF'}
                   </button>
                 </div>
@@ -2337,8 +2341,8 @@ Operator Proyeksi / Engineering XXI LMP`;
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="bg-slate-950/90 border-b border-slate-800 text-xs font-black text-slate-300 uppercase tracking-wider font-mono">
-                      <th className="py-3 px-3 text-center w-12">
+                    <tr className="bg-slate-950/90 border-b border-slate-800 text-xs sm:text-sm font-black text-slate-200 uppercase tracking-wider font-mono">
+                      <th className="py-3.5 px-3.5 text-center w-12">
                         <button
                           type="button"
                           onClick={() => {
@@ -2359,23 +2363,23 @@ Operator Proyeksi / Engineering XXI LMP`;
                           )}
                         </button>
                       </th>
-                      <th className="py-3 px-3 text-center w-12">No</th>
-                      <th className="py-3 px-3 min-w-[220px]">Judul Film</th>
-                      <th className="py-3 px-3 w-56">Status Tayang (3 Opsi)</th>
-                      <th className="py-3 px-3 w-52">Status KDM</th>
-                      <th className="py-3 px-3 w-32">Format Layar</th>
-                      <th className="py-3 px-3 w-28">Sound</th>
-                      <th className="py-3 px-3 text-center w-20">Aksi</th>
+                      <th className="py-3.5 px-3.5 text-center w-12">No</th>
+                      <th className="py-3.5 px-3.5 min-w-[200px]">Judul Film</th>
+                      <th className="py-3.5 px-3.5 w-64 min-w-[220px]">Status Tayang (3 Opsi)</th>
+                      <th className="py-3.5 px-3.5 w-44 min-w-[165px]">Status KDM</th>
+                      <th className="py-3.5 px-3.5 w-32 min-w-[110px]">Format Layar</th>
+                      <th className="py-3.5 px-3.5 w-24 min-w-[85px]">Sound</th>
+                      <th className="py-3.5 px-3.5 text-center w-16">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-xs sm:text-sm font-mono">
                     {sortedReportFilms.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400 font-mono text-xs">
+                        <td colSpan={8} className="py-12 text-center text-slate-400 font-mono text-xs sm:text-sm">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <FileText className="w-8 h-8 text-slate-600 stroke-1" />
-                            <span className="font-bold text-slate-300 text-sm">Belum ada film di Laporan Film</span>
-                            <span className="text-xs text-slate-500 max-w-md">
+                            <span className="font-bold text-slate-300 text-sm md:text-base">Belum ada film di Laporan Film</span>
+                            <span className="text-xs sm:text-sm text-slate-500 max-w-md">
                               Laporan Film masih kosong. Silakan buka menu <strong className="text-cyan-400 font-bold">Seleksi Film Laporan</strong>, pilih film hasil scan, lalu klik <strong className="text-cyan-400 font-bold">"IMPORT KE LAPORAN FILM"</strong>.
                             </span>
                           </div>
@@ -2394,7 +2398,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                                 : 'hover:bg-slate-800/40'
                             }`}
                           >
-                            <td className="py-3 px-3 text-center">
+                            <td className="py-3.5 px-3.5 text-center">
                               <input
                                 type="checkbox"
                                 checked={isChecked}
@@ -2402,15 +2406,15 @@ Operator Proyeksi / Engineering XXI LMP`;
                                 className="w-4 h-4 rounded border-slate-700 text-cyan-500 focus:ring-cyan-400 cursor-pointer accent-cyan-500"
                               />
                             </td>
-                            <td className="py-3 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
-                            <td className="py-3 px-3 font-sans font-black text-white text-sm sm:text-base tracking-tight">
+                            <td className="py-3.5 px-3.5 text-center font-bold text-slate-400">{idx + 1}</td>
+                            <td className="py-3.5 px-3.5 font-sans font-black text-white text-sm sm:text-base tracking-tight">
                               {(film.judul_film || '').toUpperCase()}
                             </td>
-                            <td className="py-3 px-3">
+                            <td className="py-3.5 px-3.5 w-64 min-w-[220px]">
                               <select
                                 value={st}
                                 onChange={(e) => handleStatusChange(film.id, e.target.value)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide border cursor-pointer w-full transition-colors ${
+                                className={`px-3 py-2 rounded-xl text-xs sm:text-sm font-black uppercase tracking-normal border cursor-pointer w-full min-w-[200px] transition-colors ${
                                   st === 'SEDANG TAYANG'
                                     ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.25)]'
                                     : st === 'SUDAH TAYANG'
@@ -2429,7 +2433,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                                 </option>
                               </select>
                             </td>
-                            <td className="py-3 px-3 min-w-[200px]">
+                            <td className="py-3.5 px-3.5 w-44 min-w-[165px]">
                               {(() => {
                                 const rawKdm = (film.kdm || '').replace(/^KDM:\s*/i, '').trim();
                                 const rawKdmUpper = rawKdm.toUpperCase();
@@ -2462,7 +2466,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                                           setKdmDateInput(isManualDate ? rawKdm : '30-09-2026');
                                         }
                                       }}
-                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono border cursor-pointer w-full transition-colors ${
+                                      className={`px-2.5 py-2 rounded-xl text-xs sm:text-sm font-bold font-mono border cursor-pointer w-full transition-colors ${
                                         isAktif
                                           ? 'bg-blue-950/90 text-blue-300 border-blue-500/50'
                                           : isTidakAktif
@@ -2478,7 +2482,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                                     {(currentSelectVal === 'MANUAL' || editingKdmFilmId === film.id) && (
                                       <div className="p-2 rounded-lg bg-slate-950 border border-amber-500/50 space-y-1.5 animate-fade-in">
                                         <div className="flex items-center justify-between">
-                                          <span className="text-[10px] font-bold text-amber-300 font-mono">1 Tanggal KDM:</span>
+                                          <span className="text-xs font-bold text-amber-300 font-mono">1 Tanggal KDM:</span>
                                           {isManualDate && editingKdmFilmId !== film.id && (
                                             <button
                                               type="button"
@@ -2486,7 +2490,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                                                 setEditingKdmFilmId(film.id);
                                                 setKdmDateInput(rawKdm);
                                               }}
-                                              className="text-[10px] font-bold text-cyan-400 hover:text-cyan-300 underline font-mono cursor-pointer"
+                                              className="text-xs font-bold text-cyan-400 hover:text-cyan-300 underline font-mono cursor-pointer"
                                             >
                                               Ubah
                                             </button>
@@ -2500,7 +2504,7 @@ Operator Proyeksi / Engineering XXI LMP`;
                                               value={kdmDateInput}
                                               onChange={(e) => setKdmDateInput(e.target.value)}
                                               placeholder="Contoh: 30-09-2026"
-                                              className="flex-1 bg-slate-900 border border-amber-500/60 rounded px-2.5 py-1 text-xs text-white font-mono focus:border-amber-400 focus:outline-none"
+                                              className="flex-1 bg-slate-900 border border-amber-500/60 rounded px-2.5 py-1 text-xs sm:text-sm text-white font-mono focus:border-amber-400 focus:outline-none"
                                             />
                                             <button
                                               type="button"
@@ -2509,13 +2513,13 @@ Operator Proyeksi / Engineering XXI LMP`;
                                                 handleKdmChange(film.id, finalVal);
                                                 setEditingKdmFilmId(null);
                                               }}
-                                              className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition cursor-pointer whitespace-nowrap"
+                                              className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs sm:text-sm transition cursor-pointer whitespace-nowrap"
                                             >
                                               OK
                                             </button>
                                           </div>
                                         ) : (
-                                          <div className="text-xs font-mono font-black text-amber-200 bg-amber-950/40 px-2 py-1 rounded border border-amber-500/30 flex items-center justify-between">
+                                          <div className="text-xs sm:text-sm font-mono font-black text-amber-200 bg-amber-950/40 px-2.5 py-1 rounded border border-amber-500/30 flex items-center justify-between">
                                             <span>{rawKdm || '30-09-2026'}</span>
                                           </div>
                                         )}
@@ -2525,21 +2529,21 @@ Operator Proyeksi / Engineering XXI LMP`;
                                 );
                               })()}
                             </td>
-                            <td className="py-3 px-3">
-                              <span className="px-2.5 py-1 rounded-md bg-slate-950 border border-cyan-500/30 text-cyan-300 text-xs font-bold">
+                            <td className="py-3.5 px-3.5">
+                              <span className="px-3 py-1.5 rounded-lg bg-slate-950 border border-cyan-500/30 text-cyan-300 text-xs sm:text-sm font-bold">
                                 {getFormattedFormat(film.format_film)}
                               </span>
                             </td>
-                            <td className="py-3 px-3 text-slate-200 font-bold text-xs sm:text-sm">
+                            <td className="py-3.5 px-3.5 text-slate-200 font-bold text-xs sm:text-sm">
                               {film.format_sound || '5.1'}
                             </td>
-                            <td className="py-3 px-3 text-center">
+                            <td className="py-3.5 px-3.5 text-center">
                               {/* Single Film Delete Button (Requirement G) */}
                               <button
                                 type="button"
                                 disabled={deletingFilmId === film.id}
                                 onClick={() => handleDeleteReportFilm(film.id, film.judul_film)}
-                                className="p-1.5 rounded-lg hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-500/40 transition cursor-pointer disabled:opacity-40"
+                                className="p-2 rounded-xl hover:bg-rose-950/80 text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-500/40 transition cursor-pointer disabled:opacity-40"
                                 title={`Hapus film "${film.judul_film}" dari Laporan`}
                               >
                                 {deletingFilmId === film.id ? (
@@ -2656,9 +2660,9 @@ Operator Proyeksi / Engineering XXI LMP`;
                           {/* Legend keterangans moved here, exactly under Operator Lippo Mall Puri line */}
                           <div className="text-left font-bold font-mono space-y-1 text-[8.5px] w-full border border-black p-1.5 bg-white leading-relaxed mt-2">
                             <p className="text-gray-950 font-black text-[8px]">KETERANGAN :</p>
-                            <p className="text-black font-extrabold text-[8px]">FONT HITAM ( FLIM BELUM TAYANG )</p>
-                            <p className="text-emerald-700 font-extrabold text-[8px]">FONT HIJAU ( FLIM SEDANG TAYANG )</p>
-                            <p className="text-red-600 font-extrabold text-[8px]">FONT MERAH ( FLIM SUDAH TAYANG )</p>
+                            <p className="text-black font-extrabold text-[8px]" style={{ color: '#000000' }}>FONT HITAM ( FLIM BELUM TAYANG )</p>
+                            <p className="text-[#00C853] font-extrabold text-[8px]" style={{ color: '#00C853' }}>FONT HIJAU ( FLIM SEDANG TAYANG )</p>
+                            <p className="text-[#FF0000] font-extrabold text-[8px]" style={{ color: '#FF0000' }}>FONT MERAH ( FLIM SUDAH TAYANG )</p>
                           </div>
                         </div>
                       </div>

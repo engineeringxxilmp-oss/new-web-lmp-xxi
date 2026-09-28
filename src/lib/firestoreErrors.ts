@@ -35,9 +35,13 @@ export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
-): never {
+): void {
+  const err = error as any;
+  const errMsg = err?.message || String(error);
+  const errCode = err?.code || '';
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: errMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,
@@ -53,6 +57,17 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+
+  const isPermissionError =
+    errCode === 'permission-denied' ||
+    errMsg.includes('insufficient permissions') ||
+    errMsg.includes('Missing or insufficient permissions');
+
+  if (isPermissionError) {
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    throw new Error(JSON.stringify(errInfo));
+  } else {
+    // If it's a transient connection or offline state, log as warning so client operates seamlessly offline
+    console.warn('Firestore Status:', errCode || errMsg, 'Path:', path);
+  }
 }

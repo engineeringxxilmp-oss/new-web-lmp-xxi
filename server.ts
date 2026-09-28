@@ -920,6 +920,89 @@ app.get("/api/drive/files", (_req, res) => {
   });
 });
 
+// API: Send Cuti Email with PDF Attachment (Requirement 11)
+app.post("/api/send-cuti-email", async (req, res) => {
+  try {
+    const { to, subject, body, pdfBase64, fileName } = req.body;
+    if (!to || !to.trim()) {
+      return res.status(400).json({ success: false, error: "Alamat email tujuan wajib diisi." });
+    }
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ success: false, error: "Subjek email wajib diisi." });
+    }
+
+    const oauth2Client = getOAuth2Client(req);
+    if (oauth2Client && driveTokens) {
+      try {
+        const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+        const cleanBase64 = pdfBase64 ? pdfBase64.replace(/^data:[^;]+;base64,/, "") : "";
+        const boundary = `boundary_${Date.now()}`;
+        const rawLines = [
+          `To: ${to.trim()}`,
+          `Subject: =?UTF-8?B?${Buffer.from(subject.trim()).toString('base64')}?=`,
+          `MIME-Version: 1.0`,
+          `Content-Type: multipart/mixed; boundary="${boundary}"`,
+          ``,
+          `--${boundary}`,
+          `Content-Type: text/plain; charset="UTF-8"`,
+          `Content-Transfer-Encoding: 8bit`,
+          ``,
+          body || "Terlampir Formulir Permohonan Cuti resmi.",
+          ``
+        ];
+
+        if (cleanBase64) {
+          rawLines.push(
+            `--${boundary}`,
+            `Content-Type: application/pdf; name="${fileName || 'Form_Cuti.pdf'}"`,
+            `Content-Disposition: attachment; filename="${fileName || 'Form_Cuti.pdf'}"`,
+            `Content-Transfer-Encoding: base64`,
+            ``,
+            cleanBase64,
+            ``
+          );
+        }
+
+        rawLines.push(`--${boundary}--`);
+
+        const encodedMessage = Buffer.from(rawLines.join("\r\n"))
+          .toString("base64")
+          .replace(/\+/g, "-")
+          .replace(/\//g, "_")
+          .replace(/=+$/, "");
+
+        await gmail.users.messages.send({
+          userId: "me",
+          requestBody: { raw: encodedMessage }
+        });
+
+        return res.json({
+          success: true,
+          message: `Email dan dokumen PDF berhasil dikirim ke ${to.trim()}!`
+        });
+      } catch (gmailErr: any) {
+        console.warn("Gmail API direct sending error:", gmailErr.message);
+        return res.status(500).json({
+          success: false,
+          error: `Gagal mengirim email langsung via Gmail API: ${gmailErr.message}.`
+        });
+      }
+    }
+
+    // If OAuth is not set up on the server
+    return res.status(500).json({
+      success: false,
+      error: "Akun Google pengirim belum terotorisasi di server. Silakan hubungkan akun Google di menu Kitab XXI atau gunakan fallback pengiriman email manual."
+    });
+  } catch (err: any) {
+    console.error("send-cuti-email error:", err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || "Terjadi kesalahan pada server saat mengirim email."
+    });
+  }
+});
+
 // API: Detect Film Schedule from Image via Gemini Vision
 app.post("/api/detect-film-schedule", async (req, res) => {
   try {

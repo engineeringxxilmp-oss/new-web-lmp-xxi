@@ -5,6 +5,7 @@
 
 import {
   LayoutDashboard,
+  Calendar,
   Map,
   Wrench,
   ClipboardList,
@@ -22,7 +23,6 @@ import {
   Menu,
   X,
   Clock,
-  Calendar,
   Shield,
   LogOut,
   UserCheck,
@@ -33,6 +33,7 @@ import { UserSession } from '../views/Login';
 
 export type TabId =
   | 'dashboard'
+  | 'form-cuti'
   | 'master-area'
   | 'ip-credential-manager'
   | 'equipment'
@@ -99,6 +100,7 @@ export default function Sidebar({ activeTab, onChangeTab, isOpen: controlledIsOp
 
   const menuItems: SidebarItem[] = [
     { id: 'dashboard', label: 'MENU', icon: LayoutDashboard, color: 'text-cyan-400' },
+    { id: 'form-cuti', label: 'FORM CUTI', icon: Calendar, color: 'text-emerald-400' },
     { id: 'master-area', label: 'MASTER AREA LMP XXI', icon: Map, color: 'text-amber-400' },
     { id: 'ip-credential-manager', label: 'IP & LOGIN', icon: Shield, color: 'text-cyan-300' },
     { id: 'equipment', label: 'LIST PERALATAN', icon: Wrench, color: 'text-emerald-400' },

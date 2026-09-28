@@ -324,22 +324,22 @@ export default function RapotFilm({
         </div>
 
         {/* Operational Statistics Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-cyan-500/20">
-          <div className="bg-[#080d1a]/80 p-3.5 rounded-xl border border-cyan-500/25">
-            <p className="text-[11px] font-mono font-bold text-cyan-400 uppercase tracking-wider">Total Master Film</p>
-            <p className="text-2xl font-black text-cyan-300 font-mono mt-0.5">{totalFilm}</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-5 border-t border-cyan-500/20">
+          <div className="bg-[#080d1a]/90 p-4 md:p-5 rounded-2xl border border-cyan-500/30 flex flex-col items-center justify-center text-center shadow-lg shadow-cyan-950/20 transition-all hover:border-cyan-400/50">
+            <p className="text-xs sm:text-sm font-mono font-bold text-cyan-400 uppercase tracking-wider">Total Master Film</p>
+            <p className="text-3xl sm:text-4xl font-black text-cyan-300 font-mono mt-1.5">{totalFilm}</p>
           </div>
-          <div className="bg-[#080d1a]/80 p-3.5 rounded-xl border border-emerald-500/25">
-            <p className="text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider">Sedang Tayang</p>
-            <p className="text-2xl font-black text-emerald-300 font-mono mt-0.5">{sedangTayangCount}</p>
+          <div className="bg-[#080d1a]/90 p-4 md:p-5 rounded-2xl border border-emerald-500/30 flex flex-col items-center justify-center text-center shadow-lg shadow-emerald-950/20 transition-all hover:border-emerald-400/50">
+            <p className="text-xs sm:text-sm font-mono font-bold text-emerald-400 uppercase tracking-wider">Sedang Tayang</p>
+            <p className="text-3xl sm:text-4xl font-black text-emerald-300 font-mono mt-1.5">{sedangTayangCount}</p>
           </div>
-          <div className="bg-[#080d1a]/80 p-3.5 rounded-xl border border-blue-500/25">
-            <p className="text-[11px] font-mono font-bold text-blue-400 uppercase tracking-wider">KDM Aktif</p>
-            <p className="text-2xl font-black text-blue-300 font-mono mt-0.5">{kdmAktifCount}</p>
+          <div className="bg-[#080d1a]/90 p-4 md:p-5 rounded-2xl border border-blue-500/30 flex flex-col items-center justify-center text-center shadow-lg shadow-blue-950/20 transition-all hover:border-blue-400/50">
+            <p className="text-xs sm:text-sm font-mono font-bold text-blue-400 uppercase tracking-wider">KDM Aktif</p>
+            <p className="text-3xl sm:text-4xl font-black text-blue-300 font-mono mt-1.5">{kdmAktifCount}</p>
           </div>
-          <div className="bg-[#080d1a]/80 p-3.5 rounded-xl border border-amber-500/25">
-            <p className="text-[11px] font-mono font-bold text-amber-400 uppercase tracking-wider">Segera / Belum Tayang</p>
-            <p className="text-2xl font-black text-amber-300 font-mono mt-0.5">{belumTayangCount}</p>
+          <div className="bg-[#080d1a]/90 p-4 md:p-5 rounded-2xl border border-amber-500/30 flex flex-col items-center justify-center text-center shadow-lg shadow-amber-950/20 transition-all hover:border-amber-400/50">
+            <p className="text-xs sm:text-sm font-mono font-bold text-amber-400 uppercase tracking-wider">Segera / Belum Tayang</p>
+            <p className="text-3xl sm:text-4xl font-black text-amber-300 font-mono mt-1.5">{belumTayangCount}</p>
           </div>
         </div>
       </div>

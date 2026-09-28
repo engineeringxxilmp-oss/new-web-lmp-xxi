@@ -29,6 +29,7 @@ import {
   IpDevice,
   ReportHistoryItem,
   JadwalFilmItem,
+  FormCutiData,
   INITIAL_AREAS,
   INITIAL_EQUIPMENT,
   INITIAL_PR_ENGINEERING,
@@ -64,6 +65,7 @@ class FirestoreDatabase {
   private ipAreas: string[] = INITIAL_IP_AREAS;
   private ipCategories: string[] = INITIAL_IP_CATEGORIES;
   private reportHistories: ReportHistoryItem[] = [];
+  private formCutiList: FormCutiData[] = [];
   private branding: SystemBranding = DEFAULT_BRANDING;
   private beritaAcaraDraft: BeritaAcaraDraft | null = null;
 
@@ -122,6 +124,15 @@ class FirestoreDatabase {
       this.ipAreas = getCached('ip_areas', INITIAL_IP_AREAS);
       this.ipCategories = getCached('ip_categories', INITIAL_IP_CATEGORIES);
       this.reportHistories = getCached('report_histories', INITIAL_REPORT_HISTORIES);
+      this.formCutiList = getCached('form_cuti', []);
+      if (this.formCutiList.length === 0) {
+        try {
+          const legacyCuti = localStorage.getItem('xxi_form_cuti_history_v1');
+          if (legacyCuti) {
+            this.formCutiList = JSON.parse(legacyCuti);
+          }
+        } catch (_) {}
+      }
       this.branding = getCached('branding', DEFAULT_BRANDING);
       this.beritaAcaraDraft = getCached('berita_acara_draft', null);
     } catch (e) {
@@ -155,8 +166,12 @@ class FirestoreDatabase {
     this.isInitialized = true;
 
     await ensureFirebaseAuth();
-    await this.seedInitialDataIfNeeded();
     this.attachRealtimeListeners();
+
+    // Run seed asynchronously in background so listeners and cache are available immediately
+    this.seedInitialDataIfNeeded().catch((err) => {
+      console.warn('Seed initial data non-blocking status:', err);
+    });
   }
 
   // Migrate existing data or seed initial cinema data if Firestore is empty
@@ -539,6 +554,23 @@ class FirestoreDatabase {
       }
     );
     this.unsubscribers.push(unsubDraft);
+
+    // 15. Form Cuti Realtime Listener
+    const unsubFormCuti = onSnapshot(
+      collection(firestore, 'form_cuti'),
+      (snapshot) => {
+        this.formCutiList = snapshot.docs.map((d) => ({ ...d.data(), id: d.id } as FormCutiData));
+        this.saveToCache('form_cuti', this.formCutiList);
+        try {
+          localStorage.setItem('xxi_form_cuti_history_v1', JSON.stringify(this.formCutiList));
+        } catch (_) {}
+        this.notify();
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'form_cuti');
+      }
+    );
+    this.unsubscribers.push(unsubFormCuti);
   }
 
   // --- EQUIPMENT CRUD (Firestore Primary) ---
@@ -1159,6 +1191,54 @@ class FirestoreDatabase {
       await deleteDoc(doc(firestore, 'report_history', id));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `report_history/${id}`);
+    }
+  }
+
+  // --- FORM CUTI CRUD (Firestore Primary) ---
+  getFormCutiList(): FormCutiData[] {
+    return this.formCutiList;
+  }
+
+  async saveFormCuti(data: FormCutiData): Promise<void> {
+    const id = data.id || `cuti-${Date.now()}`;
+    const now = new Date().toISOString();
+    const payload: FormCutiData = {
+      ...data,
+      id,
+      updatedAt: now
+    };
+
+    const index = this.formCutiList.findIndex((h) => h.id === id);
+    if (index > -1) {
+      this.formCutiList[index] = payload;
+    } else {
+      this.formCutiList.unshift(payload);
+    }
+    this.saveToCache('form_cuti', this.formCutiList);
+    try {
+      localStorage.setItem('xxi_form_cuti_history_v1', JSON.stringify(this.formCutiList));
+    } catch (_) {}
+    this.notify();
+
+    try {
+      await setDoc(doc(firestore, 'form_cuti', id), payload, { merge: true });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `form_cuti/${id}`);
+    }
+  }
+
+  async deleteFormCuti(id: string): Promise<void> {
+    this.formCutiList = this.formCutiList.filter((h) => h.id !== id);
+    this.saveToCache('form_cuti', this.formCutiList);
+    try {
+      localStorage.setItem('xxi_form_cuti_history_v1', JSON.stringify(this.formCutiList));
+    } catch (_) {}
+    this.notify();
+
+    try {
+      await deleteDoc(doc(firestore, 'form_cuti', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `form_cuti/${id}`);
     }
   }
 

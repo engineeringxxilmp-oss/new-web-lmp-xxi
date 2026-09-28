@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 90" width="900" height="90">
+  <defs>
+    <!-- Gold gradient for Cinema XXI and Premiere -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#d4af37" />
+      <stop offset="40%" stop-color="#b8860b" />
+      <stop offset="70%" stop-color="#996515" />
+      <stop offset="100%" stop-color="#734d0e" />
+    </linearGradient>
+
+    <!-- Red gradient for Cinema 21 -->
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e53935" />
+      <stop offset="60%" stop-color="#c62828" />
+      <stop offset="100%" stop-color="#8e0000" />
+    </linearGradient>
+
+    <!-- Subtle drop shadow -->
+    <filter id="subtleShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="1" stdDeviation="0.5" flood-color="#000000" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <!-- 1. LEFT LOGO: CINEMA 21 -->
+  <g id="logo-cinema-21" transform="translate(60, 10)">
+    <!-- CINEMA text -->
+    <text x="0" y="48" 
+          font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+          font-size="24" 
+          font-weight="900" 
+          letter-spacing="2.5" 
+          fill="#111827">CINEMA</text>
+    
+    <!-- Stylized 21 numeral -->
+    <g transform="translate(132, 0)">
+      <!-- 21 text with bold italic styling -->
+      <text x="0" y="52" 
+            font-family="'Impact', 'Arial Black', sans-serif" 
+            font-size="52" 
+            font-weight="900" 
+            font-style="italic" 
+            letter-spacing="-1" 
+            fill="url(#redGrad)"
+            filter="url(#subtleShadow)">21</text>
+    </g>
+  </g>
+
+  <!-- 2. CENTER LOGO: THE PREMIERE -->
+  <g id="logo-the-premiere" transform="translate(450, 12)">
+    <!-- Decorative side wing lines -->
+    <line x1="-125" y1="20" x2="-35" y2="20" stroke="#b8860b" stroke-width="1.2" stroke-linecap="round" />
+    <line x1="35" y1="20" x2="125" y2="20" stroke="#b8860b" stroke-width="1.2" stroke-linecap="round" />
+
+    <!-- Diamond accent center -->
+    <polygon points="-30,20 -33,18 -36,20 -33,22" fill="#b8860b" />
+    <polygon points="30,20 33,18 36,20 33,22" fill="#b8860b" />
+
+    <!-- "THE" text -->
+    <text x="0" y="24" 
+          text-anchor="middle" 
+          font-family="'Times New Roman', Times, Georgia, serif" 
+          font-size="13" 
+          font-weight="700" 
+          letter-spacing="4" 
+          fill="#996515">THE</text>
+    
+    <!-- "PREMIERE" text -->
+    <text x="0" y="54" 
+          text-anchor="middle" 
+          font-family="'Times New Roman', Times, Georgia, serif" 
+          font-size="28" 
+          font-weight="900" 
+          letter-spacing="6" 
+          fill="url(#goldGrad)"
+          filter="url(#subtleShadow)">PREMIERE</text>
+  </g>
+
+  <!-- 3. RIGHT LOGO: CINEMA XXI -->
+  <g id="logo-cinema-xxi" transform="translate(730, 10)">
+    <!-- "CINEMA" text centered above XXI -->
+    <text x="52" y="20" 
+          text-anchor="middle" 
+          font-family="'Times New Roman', Times, Georgia, serif" 
+          font-size="13" 
+          font-weight="700" 
+          letter-spacing="3" 
+          fill="#111827">CINEMA</text>
+    
+    <!-- "XXI" bold Roman numerals -->
+    <text x="52" y="56" 
+          text-anchor="middle" 
+          font-family="'Times New Roman', Times, Georgia, serif" 
+          font-size="44" 
+          font-weight="900" 
+          letter-spacing="2" 
+          fill="url(#goldGrad)"
+          filter="url(#subtleShadow)">XXI</text>
+  </g>
+</svg>
