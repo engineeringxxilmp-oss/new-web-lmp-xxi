@@ -42,6 +42,7 @@ export default function RapotFilm({
     defaultSubTab === 'upload' ? 'master' : defaultSubTab
   );
   const [importSuccessNotice, setImportSuccessNotice] = useState<string | null>(null);
+  const [isFullscreenPreviewActive, setIsFullscreenPreviewActive] = useState(false);
 
   // Quick summary counts
   const totalFilm = filmUploads.length;
@@ -242,8 +243,10 @@ export default function RapotFilm({
 
   return (
     <div className="space-y-6" id="rapot-film-root-view">
-      {/* Top Banner Navigation & Summary Header */}
-      <div className="bg-[#0d1322]/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/25 shadow-[0_0_20px_rgba(0,240,255,0.05)]">
+      {/* Top Banner Navigation & Summary Header (disembunyikan saat mode fullscreen preview screenshot aktif) */}
+      <div className={`bg-[#0d1322]/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/25 shadow-[0_0_20px_rgba(0,240,255,0.05)] ${
+        isFullscreenPreviewActive ? 'hidden' : 'block'
+      }`}>
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
             <div className="flex items-center gap-2 mb-2">
@@ -253,7 +256,7 @@ export default function RapotFilm({
             </div>
             <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight font-sans flex items-center gap-2.5 drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
               <Film className="h-7 w-7 text-fuchsia-400 drop-shadow-[0_0_8px_#e879f9]" />
-              RAPOT FLIM
+              RAPOT FILM
             </h2>
             <p className="text-sm md:text-base text-slate-200 mt-1.5 font-sans font-medium max-w-3xl">
               Sistem terpadu Digital Cinema Package (DCP) Cinema XXI: Master Film Tahunan (pangkalan data), Seleksi Film Laporan (Pilih Manual &amp; Tempel Daftar Film dari Server/Library), Laporan Film mingguan (status tayang manual &amp; KDM), dan Balasan Manager (deteksi disposisi coretan ❌).
@@ -304,7 +307,7 @@ export default function RapotFilm({
               type="button"
             >
               <Clapperboard className="h-4 w-4" />
-              <span>LAPORAN FLIM</span>
+              <span>LAPORAN FILM</span>
             </button>
 
             <button
@@ -360,6 +363,7 @@ export default function RapotFilm({
           <SeleksiFilmLaporanView
             masterFilms={filmUploads}
             onImportToLaporan={handleImportToLaporan}
+            onFullscreenPreviewChange={setIsFullscreenPreviewActive}
           />
         </div>
       )}

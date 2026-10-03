@@ -1538,6 +1538,68 @@ Jangan ada teks di luar JSON.`;
   }
 });
 
+// ==================== MASTER TEMPLATE PDF API ====================
+const TEMPLATE_PDF_FILENAME = "Form Cuti master pdf.pdf";
+const TEMPLATE_PDF_PATH = path.join(process.cwd(), "public", TEMPLATE_PDF_FILENAME);
+
+app.get("/api/template-pdf/status", (_req, res) => {
+  try {
+    const exists = fs.existsSync(TEMPLATE_PDF_PATH);
+    const stat = exists ? fs.statSync(TEMPLATE_PDF_PATH) : null;
+    res.json({
+      exists,
+      size: stat ? stat.size : 0,
+      path: `/${TEMPLATE_PDF_FILENAME}`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/template-pdf/upload", (req, res) => {
+  try {
+    const { base64 } = req.body;
+    if (!base64) {
+      return res.status(400).json({ error: "Data base64 tidak ditemukan" });
+    }
+    const cleanBase64 = base64.replace(/^data:application\/pdf;base64,/, "");
+    const buffer = Buffer.from(cleanBase64, "base64");
+
+    const publicDir = path.join(process.cwd(), "public");
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    fs.writeFileSync(TEMPLATE_PDF_PATH, buffer);
+    console.log(`Saved master PDF template: ${TEMPLATE_PDF_PATH} (${buffer.length} bytes)`);
+
+    res.json({
+      success: true,
+      size: buffer.length,
+      path: `/${TEMPLATE_PDF_FILENAME}`,
+    });
+  } catch (err: any) {
+    console.error("Error saving template PDF:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Explicitly serve pdf.worker.min.mjs with correct MIME type and CORS for PDF.js (both standalone and dynamic module imports)
+app.get([
+  "/pdf.worker.min.mjs",
+  "/pdf.worker.mjs",
+  "/node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+  "/node_modules/pdfjs-dist/build/pdf.worker.mjs"
+], (_req, res) => {
+  const workerPath = path.join(process.cwd(), "public", "pdf.worker.min.mjs");
+  if (fs.existsSync(workerPath)) {
+    res.setHeader("Content-Type", "text/javascript; charset=utf-8");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.sendFile(workerPath);
+  } else {
+    res.status(404).send("PDF worker file not found");
+  }
+});
+
 // Setup Vite server or Production static files
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

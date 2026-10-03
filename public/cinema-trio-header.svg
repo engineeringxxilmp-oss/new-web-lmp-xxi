@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 90" width="1200" height="90">
+  <defs>
+    <!-- Warm Gold gradient for Cinema XXI -->
+    <linearGradient id="goldText" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#D2BA80"/>
+      <stop offset="45%" stop-color="#BA9C5E"/>
+      <stop offset="100%" stop-color="#9C7F42"/>
+    </linearGradient>
+
+    <!-- Star definition for Cinema 21 -->
+    <g id="star">
+      <polygon points="0,-2.8 0.8,-0.9 2.8,-0.9 1.3,0.3 1.8,2.2 0,1.0 -1.8,2.2 -1.3,0.3 -2.8,-0.9 -0.8,-0.9" fill="#FFFFFF"/>
+    </g>
+  </defs>
+
+  <!-- ========================================================================= -->
+  <!-- 1. LEFT LOGO: Cinema XXI (Screenshot 2026-09-30 235122.png)               -->
+  <!-- ========================================================================= -->
+  <g id="cinema-xxi" transform="translate(15, 6)">
+    <!-- "Cinema" Script -->
+    <text x="0" y="58"
+      font-family="'Brush Script MT', 'Snell Roundhand', 'Monotype Corsiva', 'Dancing Script', cursive, serif"
+      font-size="62"
+      font-style="italic"
+      font-weight="bold"
+      letter-spacing="0.5"
+      fill="url(#goldText)">Cinema</text>
+
+    <!-- "XXI" Roman with Double-Line / Inline Effect -->
+    <g transform="translate(195, 2)">
+      <text x="0" y="55"
+        font-family="'Times New Roman', 'Cinzel', Georgia, serif"
+        font-size="68"
+        font-weight="bold"
+        letter-spacing="5"
+        fill="url(#goldText)">XXI</text>
+      <!-- Inline hollow grooves for the authentic XXI look -->
+      <path d="M 12 16 L 38 60" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M 47 16 L 73 60" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M 97 16 L 97 60" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 2. CENTER LOGO: the Premiere (Screenshot 2026-09-30 235128.png)           -->
+  <!-- ========================================================================= -->
+  <g id="the-premiere" transform="translate(600, 6)">
+    <!-- "the" script di atas P & r -->
+    <text x="-95" y="26"
+      font-family="'Brush Script MT', 'Snell Roundhand', 'Dancing Script', cursive, serif"
+      font-size="32"
+      font-style="italic"
+      fill="#6E6E6E">the</text>
+
+    <!-- "Premiere" italic serif elegan di bawah -->
+    <text x="0" y="60"
+      text-anchor="middle"
+      font-family="'Times New Roman', Times, 'Baskerville', serif"
+      font-size="58"
+      font-style="italic"
+      font-weight="bold"
+      letter-spacing="1"
+      fill="#6E6E6E">Premiere</text>
+
+    <!-- Dual decorative interlocking loop flourish di atas huruf e pertama -->
+    <g transform="translate(4, 21)">
+      <ellipse cx="0" cy="0" rx="8" ry="4.5" fill="none" stroke="#6E6E6E" stroke-width="1.6" transform="rotate(-15)"/>
+      <ellipse cx="7" cy="1" rx="6.5" ry="3.8" fill="none" stroke="#6E6E6E" stroke-width="1.6" transform="rotate(10)"/>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- 3. RIGHT LOGO: Cinema 21 (Screenshot 2026-09-30 235136.png)               -->
+  <!-- ========================================================================= -->
+  <g id="cinema-21" transform="translate(930, 6)">
+    <!-- "Cinema" Script silver/gray -->
+    <text x="0" y="58"
+      font-family="'Brush Script MT', 'Snell Roundhand', 'Monotype Corsiva', cursive, serif"
+      font-size="62"
+      font-style="italic"
+      font-weight="bold"
+      letter-spacing="0.5"
+      fill="#7E7E7E">Cinema</text>
+
+    <!-- Standalone 3D Extruded "21" (Blue with stars & Red 3D side) -->
+    <g transform="translate(190, 0)">
+      <!-- 1) 3D Red Extrusion Side (Offset +5px right, +6px down) -->
+      <text x="5" y="59"
+        font-family="'Impact', 'Arial Black', sans-serif"
+        font-size="64"
+        font-style="italic"
+        font-weight="900"
+        letter-spacing="1"
+        fill="#D61C27">21</text>
+      <text x="3" y="57"
+        font-family="'Impact', 'Arial Black', sans-serif"
+        font-size="64"
+        font-style="italic"
+        font-weight="900"
+        letter-spacing="1"
+        fill="#D61C27">21</text>
+
+      <!-- 2) Front Face: Deep Navy Blue with White Stroke -->
+      <text x="0" y="54"
+        font-family="'Impact', 'Arial Black', sans-serif"
+        font-size="64"
+        font-style="italic"
+        font-weight="900"
+        letter-spacing="1"
+        fill="#0E286E"
+        stroke="#FFFFFF"
+        stroke-width="1.8"
+        paint-order="stroke fill">21</text>
+
+      <!-- 3) Stars on "2" front face -->
+      <use href="#star" x="12" y="19" transform="scale(1.05)"/>
+      <use href="#star" x="23" y="13" transform="scale(1.05)"/>
+      <use href="#star" x="33" y="21" transform="scale(1.05)"/>
+      <use href="#star" x="21" y="34" transform="scale(1.05)"/>
+      <use href="#star" x="11" y="46" transform="scale(1.05)"/>
+      <use href="#star" x="24" y="49" transform="scale(1.05)"/>
+      <use href="#star" x="35" y="49" transform="scale(1.05)"/>
+
+      <!-- 4) Stars on "1" front face -->
+      <use href="#star" x="48" y="21" transform="scale(1.05)"/>
+      <use href="#star" x="52" y="30" transform="scale(1.05)"/>
+      <use href="#star" x="55" y="40" transform="scale(1.05)"/>
+      <use href="#star" x="58" y="49" transform="scale(1.05)"/>
+    </g>
+  </g>
+</svg>

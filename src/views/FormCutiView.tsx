@@ -3,12 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FormCutiData, JenisCutiType, SystemBranding } from '../types';
 import { UserSession } from './Login';
 import { firestoreDb } from '../db/firestoreDb';
 import { getIndonesianDate } from './PrEngineering';
-import CinemaCutiHeaderLogo from '../components/CinemaCutiHeaderLogo';
+import CutiPdfLivePreview from '../components/CutiPdfLivePreview';
+import {
+  loadMasterPdfFromIndexedDB,
+  fetchMasterPdfFromServer,
+  saveMasterPdfToIndexedDB,
+  uploadMasterPdfToServer,
+  generateFinalPdfWithMasterTemplate,
+  getOrLoadMasterPdfBytes,
+  cloneUint8Array
+} from '../utils/cutiPdfEngine';
 import {
   Calendar,
   FileText,
@@ -21,6 +30,7 @@ import {
   Plus,
   Trash2,
   RotateCcw,
+  CheckCircle,
   CheckCircle2,
   Clock,
   User,
@@ -173,23 +183,29 @@ export const getCutiPdfFileName = (data: FormCutiData): string => {
   return `Form Cuti - ${cleanName} - ${dateStr}.pdf`;
 };
 
-export default function FormCutiView({ branding, currentUser, onShowToast }: FormCutiProps) {
-  const paperRef = useRef<HTMLDivElement>(null);
-  const modalPaperRef = useRef<HTMLDivElement>(null);
+// Helper to check if form has any meaningful user input
+export const hasContent = (data: FormCutiData | null | undefined): boolean => {
+  if (!data) return false;
+  return Boolean(
+    (data.nama && data.nama.trim() !== '') ||
+    (data.tanggalMulai && data.tanggalMulai.trim() !== '') ||
+    (data.jenisCuti && data.jenisCuti.trim() !== '') ||
+    (data.divisi && data.divisi.trim() !== '') ||
+    (data.nik && data.nik.trim() !== '') ||
+    (data.penggantiNama && data.penggantiNama.trim() !== '') ||
+    (data.alasanCuti && data.alasanCuti.trim() !== '') ||
+    (data.hcHakCutiHari && String(data.hcHakCutiHari).trim() !== '') ||
+    (data.hcStatusVerifikasi && data.hcStatusVerifikasi.trim() !== '')
+  );
+};
 
-  // Form State: starts empty or loads current draft
-  const [formData, setFormData] = useState<FormCutiData>(() => {
-    const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
-    if (savedDraft) {
-      try {
-        const parsed = JSON.parse(savedDraft);
-        if (parsed && typeof parsed === 'object') return parsed;
-      } catch (e) {
-        // ignore
-      }
-    }
-    return createEmptyFormData();
-  });
+export default function FormCutiView({ branding, currentUser, onShowToast }: FormCutiProps) {
+  // Requirement 4: Kondisi awal form cuti harus 100% KOSONG saat pertama kali dibuka.
+  // Input Form Data: data yang sedang diketik pengguna di panel input digital
+  const [formData, setFormData] = useState<FormCutiData>(() => createEmptyFormData());
+
+  // Dokumen Sementara: data yang sudah DITERAPKAN ke preview PDF (Requirement 5 & 10)
+  const [appliedDocData, setAppliedDocData] = useState<FormCutiData>(() => createEmptyFormData());
 
   // History list from firestoreDb
   const [historyList, setHistoryList] = useState<FormCutiData[]>(() => firestoreDb.getFormCutiList());
@@ -203,9 +219,14 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTabSub, setActiveTabSub] = useState<'editor' | 'history'>('editor');
+  const [mobileEditorTab, setMobileEditorTab] = useState<'form' | 'preview'>('form');
   
   // Selected item to view in modal
   const [modalItemData, setModalItemData] = useState<FormCutiData | null>(null);
+
+  // Master PDF template bytes state
+  const [masterPdfBytes, setMasterPdfBytes] = useState<Uint8Array | null>(null);
+  const [isPdfLoading, setIsPdfLoading] = useState<boolean>(true);
 
   // Email Modal State (Requirement 11)
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
@@ -218,6 +239,48 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailErrorMsg, setEmailErrorMsg] = useState<string | null>(null);
 
+  // Load master PDF template on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function initMasterPdf() {
+      try {
+        setIsPdfLoading(true);
+        const bytes = await getOrLoadMasterPdfBytes();
+        if (bytes && isMounted) {
+          setMasterPdfBytes(cloneUint8Array(bytes));
+        }
+      } catch (err) {
+        console.warn('Error loading master PDF template:', err);
+      } finally {
+        if (isMounted) setIsPdfLoading(false);
+      }
+    }
+    initMasterPdf();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Upload or replace master PDF template handler
+  const handleUploadTemplate = async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const safeCopy = cloneUint8Array(bytes);
+      setMasterPdfBytes(safeCopy);
+      await saveMasterPdfToIndexedDB(cloneUint8Array(bytes));
+      await uploadMasterPdfToServer(cloneUint8Array(bytes));
+      if (onShowToast) onShowToast('File template PDF master asli berhasil dimuat dan disimpan!', 'success');
+    } catch (err: any) {
+      console.error('Error uploading master PDF:', err);
+      if (onShowToast) onShowToast('Gagal memuat file PDF: ' + err.message, 'error');
+    }
+  };
+
+  const handleReloadTemplate = useCallback((fresh: Uint8Array) => {
+    setMasterPdfBytes(fresh);
+  }, []);
+
   // Subscribe to firestoreDb updates
   useEffect(() => {
     const unsubscribe = firestoreDb.subscribe(() => {
@@ -225,20 +288,6 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
     });
     return () => unsubscribe();
   }, []);
-
-  // Sync active draft to localStorage
-  useEffect(() => {
-    try {
-      const hasContent = formData.nama || formData.tanggalMulai || formData.jenisCuti;
-      if (hasContent) {
-        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(formData));
-      } else {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-      }
-    } catch (e) {
-      // ignore
-    }
-  }, [formData]);
 
   // Recalculate duration when dates change
   const handleStartDateChange = (val: string) => {
@@ -285,70 +334,127 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
     }
   };
 
-  // Reset form to blank
-  const handleResetForm = () => {
-    const blank = createEmptyFormData();
-    setFormData(blank);
-    try {
-      localStorage.removeItem(DRAFT_STORAGE_KEY);
-    } catch (_) {}
-    if (onShowToast) onShowToast('Formulir cuti dikosongkan.', 'info');
+  // TOMBOL BARU — TERAPKAN (Requirement 5):
+  // 1. Memvalidasi data input.
+  // 2. Memindahkan seluruh data input ke posisi masing-masing pada dokumen PDF (appliedDocData).
+  // 3. Preview PDF langsung diperbarui.
+  // 4. Setelah berhasil diterapkan, seluruh kolom pada panel input digital dikosongkan kembali.
+  // 5. Data yang telah diterapkan tetap tampil pada preview PDF meskipun panel input digital sudah kosong.
+  const handleTerapkan = () => {
+    if (!hasContent(formData)) {
+      if (onShowToast) onShowToast('Silakan isi data pengajuan cuti pada form sebelum menekan TERAPKAN.', 'warning');
+      return;
+    }
+
+    const duration = formData.jumlahHari > 0
+      ? formData.jumlahHari
+      : calculateDaysDifference(formData.tanggalMulai, formData.tanggalSelesai);
+
+    const applied: FormCutiData = {
+      ...formData,
+      id: formData.id || `cuti-${Date.now()}`,
+      jumlahHari: duration,
+      diajukanOlehTanggal: formData.diajukanOlehTanggal || formData.tanggalMulai,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Terapkan ke state dokumen sementara preview
+    setAppliedDocData(applied);
+
+    // Kosongkan panel input digital agar siap untuk pengisian selanjutnya
+    setFormData(createEmptyFormData());
+
+    // Di perangkat mobile, otomatis alihkan ke pratinjau dokumen A4 agar user langsung melihat hasilnya
+    setMobileEditorTab('preview');
+
+    if (onShowToast) onShowToast('Data formulir berhasil DITERAPKAN ke pratinjau dokumen PDF!', 'success');
   };
 
-  // SAVE & AUTO-RESET
+  // TOMBOL RESET FORM (Requirement 7):
+  const handleResetForm = () => {
+    const hasActiveData = hasContent(formData) || hasContent(appliedDocData);
+    if (hasActiveData) {
+      const confirmed = window.confirm(
+        'Apakah Anda yakin ingin mengosongkan seluruh panel input dan pratinjau dokumen? Data pengajuan yang belum disimpan akan hilang.'
+      );
+      if (!confirmed) return;
+    }
+
+    setFormData(createEmptyFormData());
+    setAppliedDocData(createEmptyFormData());
+    if (onShowToast) onShowToast('Formulir dan preview berhasil dikosongkan.', 'info');
+  };
+
+  // TOMBOL SIMPAN — SIMPAN KE RIWAYAT CUTI (Requirement 6):
+  // 1. Simpan data dokumen yang sedang tampil ke Riwayat Cuti.
+  // 2. Konfirmasi penyimpanan berhasil.
+  // 3. Kosongkan seluruh data pada panel input DAN dokumen sementara.
+  // 4. Preview kembali ke template master kosong, siap untuk dokumen baru.
+  // 5. Jika gagal: JANGAN kosongkan form atau dokumen sementara!
   const handleSave = async () => {
-    if (!formData.nama.trim()) {
+    // Tentukan data yang akan disimpan: prioritaskan data yang sudah DITERAPKAN, fallback ke formData jika belum sempat tekan terapkan
+    const targetData = hasContent(appliedDocData) ? appliedDocData : formData;
+
+    if (!hasContent(targetData)) {
+      if (onShowToast) onShowToast('Tidak ada data formulir yang dapat disimpan. Silakan isi form dan tekan TERAPKAN terlebih dahulu.', 'warning');
+      return;
+    }
+
+    if (!targetData.nama || !targetData.nama.trim()) {
       if (onShowToast) onShowToast('Harap isi Nama Lengkap Pegawai.', 'warning');
       return;
     }
-    if (!formData.tanggalMulai) {
+    if (!targetData.tanggalMulai) {
       if (onShowToast) onShowToast('Harap pilih Tanggal Mulai Cuti.', 'warning');
       return;
     }
-    if (!formData.tanggalSelesai) {
+    if (!targetData.tanggalSelesai) {
       if (onShowToast) onShowToast('Harap pilih Tanggal Selesai Cuti.', 'warning');
       return;
     }
-    if (!formData.jenisCuti) {
+    if (!targetData.jenisCuti) {
       if (onShowToast) onShowToast('Harap pilih Jenis Cuti.', 'warning');
       return;
     }
 
     try {
       setIsSaving(true);
-      const duration = formData.jumlahHari > 0 ? formData.jumlahHari : calculateDaysDifference(formData.tanggalMulai, formData.tanggalSelesai);
+      const duration = targetData.jumlahHari > 0
+        ? targetData.jumlahHari
+        : calculateDaysDifference(targetData.tanggalMulai, targetData.tanggalSelesai);
+
       const docToSave: FormCutiData = {
-        ...formData,
-        id: formData.id || `cuti-${Date.now()}`,
+        ...targetData,
+        id: targetData.id || `cuti-${Date.now()}`,
         jumlahHari: duration,
-        diajukanOlehTanggal: formData.diajukanOlehTanggal || formData.tanggalMulai,
+        diajukanOlehTanggal: targetData.diajukanOlehTanggal || targetData.tanggalMulai,
         updatedAt: new Date().toISOString()
       };
 
       await firestoreDb.saveFormCuti(docToSave);
-      if (onShowToast) onShowToast('Form Cuti Berhasil Disimpan', 'success');
 
-      // Reset form
-      const blank = createEmptyFormData();
-      setFormData(blank);
-      try {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
-      } catch (_) {}
+      // Setelah konfirmasi penyimpanan berhasil:
+      // Kosongkan seluruh data pada panel input dan dokumen sementara
+      setFormData(createEmptyFormData());
+      setAppliedDocData(createEmptyFormData());
 
       setHistoryList([...firestoreDb.getFormCutiList()]);
+      if (onShowToast) onShowToast('Form Cuti Berhasil Disimpan ke Riwayat Cuti!', 'success');
     } catch (err) {
       console.error('Error saving form cuti:', err);
+      // PENTING (Requirement 6): Jika gagal, jangan mengosongkan panel input maupun dokumen sementara!
       if (onShowToast) onShowToast('Gagal menyimpan formulir cuti. Silakan coba kembali.', 'error');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Load from history into editor
+  // Load from history into editor and preview
   const handleLoadItem = (item: FormCutiData) => {
     setFormData({ ...item });
+    setAppliedDocData({ ...item });
     setActiveTabSub('editor');
-    if (onShowToast) onShowToast(`Formulir cuti atas nama ${item.nama} dimuat ke editor.`, 'info');
+    if (onShowToast) onShowToast(`Formulir cuti atas nama ${item.nama} dimuat ke editor dan preview.`, 'info');
   };
 
   // Open modal preview for a specific item
@@ -373,46 +479,72 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
   };
 
   // Print A4 Document
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    try {
+      const result = await generatePdfBlob(modalItemData || formData);
+      if (result) {
+        const blobUrl = URL.createObjectURL(result.blob);
+        const printFrame = document.createElement('iframe');
+        printFrame.style.position = 'fixed';
+        printFrame.style.right = '0';
+        printFrame.style.bottom = '0';
+        printFrame.style.width = '0';
+        printFrame.style.height = '0';
+        printFrame.style.border = '0';
+        printFrame.src = blobUrl;
+        document.body.appendChild(printFrame);
+        printFrame.onload = () => {
+          setTimeout(() => {
+            try {
+              printFrame.contentWindow?.focus();
+              printFrame.contentWindow?.print();
+            } catch (_) {}
+          }, 300);
+        };
+        return;
+      }
+    } catch (_) {}
     window.print();
   };
 
   /**
    * Helper: Generate Canvas & PDF
    * Standard A4 dimensions: 210mm x 297mm
-   * Uses the EXACT SAME master template element for all actions (Preview, Download, Email, WhatsApp)
+   * Uses the authentic master PDF template bytes directly
    */
   const generatePdfBlob = async (customData?: FormCutiData): Promise<{ blob: Blob; base64: string; fileName: string } | null> => {
-    const targetElement = modalPaperRef.current || paperRef.current;
-    if (!targetElement) return null;
+    const dataToExport = customData || modalItemData || (hasContent(appliedDocData) ? appliedDocData : (hasContent(formData) ? formData : createEmptyFormData()));
 
-    const dataToExport = customData || modalItemData || formData;
-    const fileName = getCutiPdfFileName(dataToExport);
+    let templateBytes = masterPdfBytes;
+    if (!templateBytes || templateBytes.byteLength < 2000) {
+      templateBytes = await getOrLoadMasterPdfBytes();
+      if (templateBytes) {
+        setMasterPdfBytes(cloneUint8Array(templateBytes));
+      }
+    }
 
-    const canvas = await html2canvas(targetElement, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff'
-    });
+    if (!templateBytes || templateBytes.byteLength < 2000) {
+      const fetched = await fetchMasterPdfFromServer();
+      if (fetched) {
+        templateBytes = fetched;
+        setMasterPdfBytes(cloneUint8Array(fetched));
+      }
+    }
 
-    const imgData = canvas.toDataURL('image/jpeg', 0.98);
-    const pdf = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
+    if (!templateBytes || templateBytes.byteLength < 200) {
+      throw new Error('File master PDF (Form Cuti master pdf.pdf) tidak ditemukan.');
+    }
 
-    pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
-    const blob = pdf.output('blob');
-    const base64 = pdf.output('datauristring');
-
-    return { blob, base64, fileName };
+    return await generateFinalPdfWithMasterTemplate(
+      templateBytes,
+      dataToExport,
+      formatIndoDate
+    );
   };
 
   // DOWNLOAD PDF (Requirement 10)
   const handleExportPdf = async (customData?: FormCutiData): Promise<Blob | null> => {
-    const dataToExport = customData || modalItemData || formData;
+    const dataToExport = customData || modalItemData || (hasContent(appliedDocData) ? appliedDocData : (hasContent(formData) ? formData : createEmptyFormData()));
     try {
       setIsExporting(true);
       if (onShowToast) onShowToast('Menyiapkan dokumen PDF A4 resmi...', 'info');
@@ -441,7 +573,7 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
 
   // OPEN EMAIL MODAL (Requirement 11)
   const handleOpenEmailModal = async () => {
-    const activeData = modalItemData || formData;
+    const activeData = modalItemData || (hasContent(appliedDocData) ? appliedDocData : (hasContent(formData) ? formData : createEmptyFormData()));
     const fileName = getCutiPdfFileName(activeData);
     const defaultSubj = `Form Cuti - ${activeData.nama || 'Pegawai'} - ${activeData.tanggalMulai || new Date().toISOString().split('T')[0]}`;
     
@@ -562,7 +694,7 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
 
   // SHARE WHATSAPP ACTION (Requirement 12)
   const handleShareWhatsApp = async () => {
-    const activeData = modalItemData || formData;
+    const activeData = modalItemData || (hasContent(appliedDocData) ? appliedDocData : (hasContent(formData) ? formData : createEmptyFormData()));
     const fileName = getCutiPdfFileName(activeData);
 
     const waText =
@@ -673,309 +805,7 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
    * - 2. HASIL VERIFIKASI DATA CUTI KARYAWAN ( * ) : Dapat Diproses / Tidak Dapat Diproses
    * - HC Database & Tanda Tangan
    * ========================================================================= */
-  const renderA4Paper = (
-    containerRef: React.RefObject<HTMLDivElement | null>,
-    data: FormCutiData
-  ) => {
-    return (
-      <div
-        ref={containerRef}
-        id="master-a4-cuti-sheet"
-        className="w-[210mm] min-h-[297mm] h-[297mm] bg-white text-black p-[7mm_10mm] box-border shadow-2xl mx-auto border border-slate-300 font-sans select-text flex flex-col"
-        style={{
-          width: '210mm',
-          height: '297mm',
-          maxHeight: '297mm',
-          boxSizing: 'border-box',
-          overflow: 'hidden'
-        }}
-      >
-        {/* FRAMING BORDER UTAMA PERSIS SESUAI MASTER PDF */}
-        <div className="border border-black w-full h-full p-3 flex flex-col justify-between box-border">
-          {/* 1. MASTER HEADER: TRIO LOGO (Cinema XXI | the Premiere | Cinema 21) */}
-          <div className="w-full pt-0.5 pb-1">
-            <CinemaCutiHeaderLogo className="w-full h-auto block" />
-          </div>
-
-          {/* 2. MASTER TITLE: FORMULIR PERMOHONAN CUTI */}
-          <div className="text-center pt-0.5 pb-1.5">
-            <h1 className="text-[14.5px] font-bold font-sans uppercase tracking-widest text-black underline underline-offset-4 decoration-black">
-              FORMULIR PERMOHONAN CUTI
-            </h1>
-          </div>
-
-          {/* 3. SECTION I: DATA PEGAWAI */}
-          <div className="text-[10px] leading-tight" id="section-1-pegawai">
-            <table className="w-full border-collapse border border-black text-[9.5px] bg-white">
-              <tbody>
-                <tr className="border-b border-black">
-                  <td colSpan={4} className="font-bold text-[10px] uppercase px-2 py-0.5 tracking-wide text-black">
-                    I. DATA PEGAWAI
-                  </td>
-                </tr>
-                <tr className="border-b border-black">
-                  <td className="w-[16%] px-2 py-1 border-r border-black font-normal text-black">Nama</td>
-                  <td className="w-[34%] px-2 py-1 border-r border-black font-normal text-black">{data.nama || ''}</td>
-                  <td className="w-[16%] px-2 py-1 border-r border-black font-normal text-black">NIK</td>
-                  <td className="w-[34%] px-2 py-1 font-normal text-black">{data.nik || ''}</td>
-                </tr>
-                <tr className="border-b border-black">
-                  <td className="px-2 py-1 border-r border-black font-normal text-black">Divisi</td>
-                  <td className="px-2 py-1 border-r border-black font-normal text-black">{data.divisi || ''}</td>
-                  <td className="px-2 py-1 border-r border-black font-normal text-black">NO. HP</td>
-                  <td className="px-2 py-1 font-normal text-black">{data.noHp || ''}</td>
-                </tr>
-                <tr>
-                  <td className="px-2 py-1 border-r border-black font-normal text-black">Jabatan/Posisi</td>
-                  <td colSpan={3} className="px-2 py-1 font-normal text-black">{data.jabatan || ''}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* 4. SECTION II: RENCANA CUTI & SECTION III: BEKERJA KEMBALI (Sesuai Master PDF Tanpa Box) */}
-          <div className="text-[10px] leading-snug space-y-1 my-1 text-black">
-            <div className="flex items-baseline">
-              <span className="font-normal">II. RENCANA CUTI : &nbsp;</span>
-              <span className="font-normal">
-                {data.tanggalMulai ? `${formatIndoDate(data.tanggalMulai)} s/d ${formatIndoDate(data.tanggalSelesai)} ( ${data.jumlahHari || 0} Hari Cuti )` : ''}
-              </span>
-            </div>
-            <div className="flex items-baseline">
-              <span className="font-normal">III. BEKERJA KEMBALI : &nbsp;</span>
-              <span className="font-normal">
-                {data.tanggalKembali ? `Tanggal ${formatIndoDate(data.tanggalKembali)}` : ''}
-              </span>
-            </div>
-          </div>
-
-          {/* 5. SECTION IV: JENIS CUTI YANG DIAMBIL (Sesuai Master PDF: 3 Kolom Tanpa Box) */}
-          <div className="text-[10px] leading-tight my-1 text-black" id="section-4-jenis">
-            <div className="font-normal mb-1.5">IV. JENIS CUTI YANG DIAMBIL (</div>
-            <div className="grid grid-cols-12 gap-x-2 text-[9.5px]">
-              {/* Kolom 1 (4 pilihan) */}
-              <div className="col-span-4 space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                    {data.jenisCuti === 'Cuti Tahunan' ? '✓' : ''}
-                  </div>
-                  <span>Cuti Tahunan</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                    {data.jenisCuti === 'Menikah' ? '✓' : ''}
-                  </div>
-                  <span>Menikah</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                    {data.jenisCuti === 'Menikahkan Anak' ? '✓' : ''}
-                  </div>
-                  <span>Menikahkan Anak</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                    {data.jenisCuti === 'Khitanan Anak' ? '✓' : ''}
-                  </div>
-                  <span>Khitanan Anak</span>
-                </div>
-              </div>
-
-              {/* Kolom 2 (3 pilihan) */}
-              <div className="col-span-4 space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                    {data.jenisCuti === 'Baptisan Anak' ? '✓' : ''}
-                  </div>
-                  <span>Baptisan Anak</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0">
-                    {data.jenisCuti === 'Istri Melahirkan / Keguguran' || data.jenisCuti === 'Istri Melahirkan/Keguguran' ? '✓' : ''}
-                  </div>
-                  <span>Istri Melahirkan/Keguguran</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                    {data.jenisCuti === 'Suami/Istri, Orangtua/Mertua atau Menantu Meninggal' ? '✓' : ''}
-                  </div>
-                  <div className="leading-tight">
-                    <div>Suami/Istri, Orangtua/Mertua atau -</div>
-                    <div>Menantu Meninggal</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Kolom 3 (1 pilihan) */}
-              <div className="col-span-4 space-y-1.5">
-                <div className="flex items-start gap-2">
-                  <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                    {data.jenisCuti === 'Anggota keluarga dalam 1 rumah meninggal dunia' ? '✓' : ''}
-                  </div>
-                  <div className="leading-tight">
-                    <div>Anggota keluarga dalam 1 -</div>
-                    <div>rumah meninggal dunia</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 6. SECTION V: ALASAN CUTI */}
-          <div className="text-[10px] leading-tight" id="section-5-alasan">
-            <table className="w-full border-collapse border border-black text-[9.5px] bg-white">
-              <tbody>
-                <tr className="border-b border-black">
-                  <td className="font-bold text-[10px] uppercase px-2 py-0.5 tracking-wide text-black">
-                    V. ALASAN CUTI
-                  </td>
-                </tr>
-                <tr>
-                  <td className="p-2 min-h-[44px] h-[44px] align-top text-[9.5px] text-black font-normal leading-relaxed">
-                    {data.alasanCuti || ''}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* 7. SECTION VI: PEJABAT PENGGANTI SELAMA CUTI */}
-          <div className="text-[10px] leading-tight" id="section-6-pengganti">
-            <table className="w-full border-collapse border border-black text-[9.5px] bg-white">
-              <tbody>
-                <tr className="border-b border-black">
-                  <td colSpan={4} className="font-bold text-[10px] px-2 py-0.5 tracking-wide text-black">
-                    VI. Pejabat Pengganti Selama Cuti
-                  </td>
-                </tr>
-                <tr>
-                  <td className="w-[16%] font-normal px-2 py-1 border-r border-black text-black">Nama</td>
-                  <td className="w-[34%] px-2 py-1 border-r border-black font-normal text-black">{data.penggantiNama || ''}</td>
-                  <td className="w-[16%] font-normal px-2 py-1 border-r border-black text-black">No. HP</td>
-                  <td className="w-[34%] px-2 py-1 font-normal text-black">{data.penggantiNoHp || ''}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* 8. SECTION VII: TANDA TANGAN / PERSETUJUAN (Sesuai Master PDF) */}
-          <div className="grid grid-cols-3 gap-6 text-center my-2 text-[10px] text-black" id="section-tanda-tangan">
-            {/* Diajukan Oleh */}
-            <div className="flex flex-col items-center">
-              <span className="font-normal mb-7">Diajukan Oleh,</span>
-              <span className="font-normal text-black min-h-[14px] text-[9.5px]">{data.diajukanOlehNama || ''}</span>
-              <div className="border-b border-black w-40 my-0.5"></div>
-              <span className="text-[9px] text-black font-normal min-h-[14px]">{data.diajukanOlehJabatan || ''}</span>
-            </div>
-
-            {/* Disetujui Oleh */}
-            <div className="flex flex-col items-center">
-              <span className="font-normal mb-7">Disetujui Oleh,</span>
-              <span className="font-normal text-black min-h-[14px] text-[9.5px]">{data.disetujuiOlehNama || ''}</span>
-              <div className="border-b border-black w-40 my-0.5"></div>
-              <span className="text-[9px] text-black font-normal min-h-[14px]">{data.disetujuiOlehJabatan || ''}</span>
-            </div>
-
-            {/* Mengetahui */}
-            <div className="flex flex-col items-center">
-              <span className="font-normal mb-7">Mengetahui,</span>
-              <span className="font-normal text-black min-h-[14px] text-[9.5px]">{data.mengetahuiNama || ''}</span>
-              <div className="border-b border-black w-40 my-0.5"></div>
-              <span className="text-[9px] text-black font-normal min-h-[14px]">{data.mengetahuiJabatan || ''}</span>
-            </div>
-          </div>
-
-          {/* 9. TEAR-OFF CUT LINE (Garis Putus-Putus Sesuai Master PDF) */}
-          <div className="border-t border-dashed border-black w-full my-1.5 select-none" id="tear-off-line"></div>
-
-          {/* 10. SECTION VIII: DIISI OLEH HUMAN CAPITAL (Sesuai Master PDF) */}
-          <div className="text-[10px] leading-tight text-black" id="section-8-hc">
-            {/* Title */}
-            <div className="text-center font-bold text-[11px] underline uppercase tracking-wider my-1 text-black">
-              DIISI OLEH HUMAN CAPITAL
-            </div>
-
-            {/* 1. DATA CUTI */}
-            <div className="my-1">
-              <div className="font-normal mb-1">1. &nbsp; DATA CUTI</div>
-              <table className="w-full border-collapse border border-black text-[9.5px] bg-white">
-                <tbody>
-                  <tr className="border-b border-black">
-                    <td className="w-[35%] px-3 py-0.5 border-r border-black font-normal text-black">a. Hak Cuti</td>
-                    <td className="w-[65%] px-3 py-0.5 font-normal text-black">
-                      {data.hcHakCutiHari ? `${data.hcHakCutiHari} Hari` : '........Hari'}
-                    </td>
-                  </tr>
-                  <tr className="border-b border-black">
-                    <td className="px-3 py-0.5 border-r border-black font-normal text-black">b. Cuti yang sudah diambil</td>
-                    <td className="px-3 py-0.5 font-normal text-black">
-                      {data.hcCutiTelahDiambil ? `${data.hcCutiTelahDiambil} Hari` : '........Hari'}
-                    </td>
-                  </tr>
-                  <tr className="border-b border-black">
-                    <td className="px-3 py-0.5 border-r border-black font-normal text-black">c. Izin (Potong Cuti)</td>
-                    <td className="px-3 py-0.5 font-normal text-black">
-                      {data.hcIzin ? `${data.hcIzin} Hari` : '........Hari'}
-                    </td>
-                  </tr>
-                  <tr className="border-b border-black">
-                    <td className="px-3 py-0.5 border-r border-black font-normal text-black">d. Alpa (Potong Cuti)</td>
-                    <td className="px-3 py-0.5 font-normal text-black">
-                      {data.hcAlpa ? `${data.hcAlpa} Hari` : '........Hari'}
-                    </td>
-                  </tr>
-                  <tr className="border-b border-black">
-                    <td className="px-3 py-0.5 border-r border-black font-normal text-black">e. Sakit</td>
-                    <td className="px-3 py-0.5 font-normal text-black">
-                      {data.hcSakit ? `${data.hcSakit} Hari` : '........Hari'}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="px-3 py-0.5 border-r border-black font-normal text-black">f. Sisa Cuti</td>
-                    <td className="px-3 py-0.5 font-normal text-black">
-                      {data.hcSisaCuti ? `${data.hcSisaCuti} Hari` : '........Hari'}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* 2. HASIL VERIFIKASI DATA CUTI KARYAWAN & HC DATABASE */}
-            <div className="flex justify-between items-start text-[10px] mt-1.5 pb-0.5">
-              {/* Left: Hasil Verifikasi */}
-              <div className="space-y-1">
-                <div className="font-normal">2. &nbsp; HASIL VERIFIKASI DATA CUTI KARYAWAN ( &nbsp;* ) :</div>
-                <div className="pl-4 space-y-1 text-[9.5px]">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center font-bold text-[9px] shrink-0">
-                      {data.hcStatusVerifikasi === 'Dapat Diproses' ? 'x' : ''}
-                    </div>
-                    <span>Permohonan Cuti <strong>Dapat</strong> Diproses</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3.5 h-3.5 border border-black bg-white flex items-center justify-center font-bold text-[9px] shrink-0">
-                      {data.hcStatusVerifikasi === 'Tidak Dapat Diproses' ? 'x' : ''}
-                    </div>
-                    <span>Permohonan Cuti <strong>Tidak Dapat</strong> Diproses</span>
-                  </div>
-                </div>
-                <div className="text-[8.5px] italic text-slate-700 pt-2">
-                  * Pilih salah satu dengan memberi tanda silang ( x )
-                </div>
-              </div>
-
-              {/* Right: HC Database Signature */}
-              <div className="text-center w-56 text-[10px] pt-0.5">
-                <div className="font-normal mb-8">HC Database,</div>
-                <div>(............................................)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    );
-  };
+  const renderA4Paper = () => null;
 
   return (
     <div className="space-y-6 text-slate-100 font-sans pb-10" id="form-cuti-main-view">
@@ -996,9 +826,20 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
           </div>
         </div>
 
-        {/* WORKFLOW BUTTONS (Requirement 13: [PREVIEW] [DOWNLOAD PDF] [KIRIM EMAIL] [SHARE WHATSAPP]) */}
+        {/* WORKFLOW BUTTONS (Requirement 5, 9, 10, 11, 12, 13: [TERAPKAN] [PREVIEW] [DOWNLOAD PDF] [KIRIM EMAIL] [SHARE WHATSAPP] [SIMPAN]) */}
         <div className="flex flex-wrap items-center gap-2">
           
+          {/* 0. TOMBOL BARU — TERAPKAN (Requirement 5) */}
+          <button
+            onClick={handleTerapkan}
+            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 text-xs font-black font-mono tracking-wider flex items-center gap-2 shadow-[0_0_15px_rgba(52,211,153,0.35)] transition-all cursor-pointer active:scale-95"
+            id="btn-workflow-terapkan"
+            title="Terapkan data input ke preview dokumen PDF"
+          >
+            <CheckCircle className="w-4 h-4 stroke-[2.5]" />
+            <span>TERAPKAN</span>
+          </button>
+
           {/* 1. TOMBOL PREVIEW (Requirement 9) */}
           <button
             onClick={() => {
@@ -1223,10 +1064,39 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
         </div>
       ) : (
         /* ================= EDITOR & LIVE SPLIT VIEW ================= */
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-          
-          {/* LEFT COLUMN: DIGITAL INPUT PANELS (XL: 5 COLUMNS) */}
-          <div className="xl:col-span-5 space-y-4">
+        <div className="space-y-4">
+          {/* MOBILE VIEW TOGGLE SWITCHER (Form Input vs Paper Document) */}
+          <div className="flex xl:hidden w-full bg-[#0a1122]/95 p-1 rounded-xl border border-cyan-500/30 shadow-md">
+            <button
+              type="button"
+              onClick={() => setMobileEditorTab('form')}
+              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                mobileEditorTab === 'form'
+                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Formulir Input</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileEditorTab('preview')}
+              className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                mobileEditorTab === 'preview'
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span>Pratinjau Kertas A4</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+            
+            {/* LEFT COLUMN: DIGITAL INPUT PANELS (XL: 5 COLUMNS) */}
+            <div className={`xl:col-span-5 space-y-4 ${mobileEditorTab === 'preview' ? 'hidden xl:block' : 'block'}`}>
             
             {/* CARD 1: DATA PEGAWAI (Requirement 2) */}
             <div className="bg-[#0b1329]/85 backdrop-blur-md border border-cyan-500/25 p-4 sm:p-5 rounded-2xl shadow-xl space-y-3">
@@ -1533,122 +1403,84 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
               </div>
             </div>
 
-            {/* CARD 6: DIISI OLEH HUMAN CAPITAL (OPSIONAL) */}
-            <div className="bg-[#0b1329]/85 backdrop-blur-md border border-cyan-500/25 p-4 sm:p-5 rounded-2xl shadow-xl space-y-3">
-              <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs font-bold border-b border-cyan-500/20 pb-2">
-                <FileCheck className="w-4 h-4 text-cyan-300" />
-                <span>VIII. DIISI OLEH HUMAN CAPITAL (OPSIONAL)</span>
+
+
+            {/* TOMBOL BARU — TERAPKAN (Requirement 5) */}
+            <div className="bg-gradient-to-r from-emerald-950/80 to-cyan-950/80 border border-emerald-500/40 p-4 rounded-2xl shadow-xl flex flex-col gap-2">
+              <div className="text-[11px] font-mono text-emerald-300 font-bold uppercase tracking-wider flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                <span>TERAPKAN DATA KE DOKUMEN</span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">a. Hak Cuti (Hari)</label>
-                  <input
-                    type="text"
-                    value={formData.hcHakCutiHari}
-                    onChange={(e) => setFormData((p) => ({ ...p, hcHakCutiHari: e.target.value }))}
-                    placeholder="Hari"
-                    className="w-full h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">b. Cuti Yang Sudah Diambil</label>
-                  <input
-                    type="text"
-                    value={formData.hcCutiTelahDiambil}
-                    onChange={(e) => setFormData((p) => ({ ...p, hcCutiTelahDiambil: e.target.value }))}
-                    placeholder="Hari"
-                    className="w-full h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">c. Izin (Potong Cuti)</label>
-                  <input
-                    type="text"
-                    value={formData.hcIzin || ''}
-                    onChange={(e) => setFormData((p) => ({ ...p, hcIzin: e.target.value }))}
-                    placeholder="Hari"
-                    className="w-full h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">d. Alpa (Potong Cuti)</label>
-                  <input
-                    type="text"
-                    value={formData.hcAlpa || ''}
-                    onChange={(e) => setFormData((p) => ({ ...p, hcAlpa: e.target.value }))}
-                    placeholder="Hari"
-                    className="w-full h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">e. Sakit</label>
-                  <input
-                    type="text"
-                    value={formData.hcSakit || ''}
-                    onChange={(e) => setFormData((p) => ({ ...p, hcSakit: e.target.value }))}
-                    placeholder="Hari"
-                    className="w-full h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] text-slate-400 mb-0.5">f. Sisa Cuti</label>
-                  <input
-                    type="text"
-                    value={formData.hcSisaCuti}
-                    onChange={(e) => setFormData((p) => ({ ...p, hcSisaCuti: e.target.value }))}
-                    placeholder="Hari"
-                    className="w-full h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[10px] text-slate-400 mb-0.5">2. Hasil Verifikasi Data Cuti ( * )</label>
-                  <select
-                    value={formData.hcStatusVerifikasi || ''}
-                    onChange={(e) => setFormData((p) => ({ ...p, hcStatusVerifikasi: e.target.value as any }))}
-                    className="w-full h-8 px-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs"
-                  >
-                    <option value="">-- Belum Diverifikasi --</option>
-                    <option value="Dapat Diproses">Permohonan Cuti Dapat Diproses</option>
-                    <option value="Tidak Dapat Diproses">Permohonan Cuti Tidak Dapat Diproses</option>
-                  </select>
-                </div>
-              </div>
+              <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
+                Pindahkan data input ke posisi masing-masing pada dokumen PDF. Setelah diterapkan, kolom formulir ini dikosongkan agar siap digunakan untuk pengisian berikutnya.
+              </p>
+              <button
+                type="button"
+                onClick={handleTerapkan}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-mono font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(52,211,153,0.35)] transition-all cursor-pointer active:scale-98"
+                id="btn-terapkan-form-cuti-bottom"
+              >
+                <CheckCircle className="w-4 h-4 stroke-[2.5]" />
+                <span>TERAPKAN KE PREVIEW PDF</span>
+              </button>
             </div>
 
           </div>
 
           {/* RIGHT COLUMN: LIVE A4 PAPER PREVIEW (XL: 7 COLUMNS) */}
-          <div className="xl:col-span-7 space-y-3">
-            <div className="flex items-center justify-between px-2">
+          <div className={`xl:col-span-7 space-y-3 ${mobileEditorTab === 'form' ? 'hidden xl:block' : 'block'}`}>
+            <div className="flex items-center justify-between px-2 flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-mono font-bold text-cyan-300 uppercase tracking-wider">
-                  MASTER TEMPLATE A4 PREVIEW (LOCKED)
+                <span className="text-xs font-mono font-bold text-slate-200 uppercase tracking-wider">
+                  DOKUMEN RESMI FORMULIR CUTI (A4)
                 </span>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileEditorTab('form')}
+                  className="xl:hidden px-2.5 py-1.5 rounded-xl bg-slate-800 text-cyan-300 border border-slate-700 text-xs font-mono font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  ← Edit Form
+                </button>
                 <button
                   onClick={() => {
                     setModalItemData(null);
                     setIsPreviewModalOpen(true);
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-cyan-950 border border-cyan-500/40 text-cyan-300 text-xs font-mono hover:bg-cyan-900 transition-all flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700/80 text-cyan-300 text-xs font-mono hover:bg-slate-800 hover:border-cyan-500/50 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                   title="Lihat Pratinjau Layar Penuh"
                 >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>Perbesar Layar Penuh</span>
+                  <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Layar Penuh</span>
                 </button>
               </div>
             </div>
 
-            {/* Paper Preview Container with Scaled Render */}
-            <div className="bg-[#050811] p-3 sm:p-5 rounded-2xl border border-cyan-500/20 shadow-2xl overflow-x-auto flex justify-center items-start min-h-[700px]">
-              <div className="transform origin-top scale-[0.68] sm:scale-[0.8] md:scale-[0.88] lg:scale-[0.95] xl:scale-[0.76] 2xl:scale-[0.88] transition-transform">
-                {renderA4Paper(paperRef, formData)}
-              </div>
+            {/* Realistic Workspace Desk Preview Container */}
+            <div className="bg-gradient-to-b from-[#0b1220] via-[#080d18] to-[#04070e] p-2 sm:p-6 rounded-2xl border border-slate-800/80 shadow-[inset_0_2px_12px_rgba(0,0,0,0.7)] overflow-x-auto flex justify-center items-start min-h-[500px]">
+              {masterPdfBytes ? (
+                <div className="w-full flex justify-center min-w-0">
+                  <CutiPdfLivePreview
+                    masterPdfBytes={masterPdfBytes}
+                    formData={appliedDocData}
+                    formatIndoDate={formatIndoDate}
+                    onUploadTemplate={handleUploadTemplate}
+                    onReloadTemplate={handleReloadTemplate}
+                    scale={1.0}
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-16 text-center text-cyan-300 font-mono text-xs gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                  <span>Memuat Dokumen PDF Master Asli (Form Cuti master pdf.pdf)...</span>
+                </div>
+              )}
             </div>
           </div>
 
+        </div>
         </div>
       )}
 
@@ -1753,16 +1585,23 @@ export default function FormCutiView({ branding, currentUser, onShowToast }: For
 
           {/* Modal Scrollable Canvas Body */}
           <div className="flex-1 overflow-auto p-4 sm:p-8 flex justify-center items-start bg-[#0a0f1d]">
-            <div
-              style={{
-                transform: `scale(${previewZoom / 100})`,
-                transformOrigin: 'top center',
-                transition: 'transform 0.15s ease-out'
-              }}
-              className="my-4"
-            >
-              {renderA4Paper(modalPaperRef, modalItemData || formData)}
-            </div>
+            {masterPdfBytes ? (
+              <div className="my-4 flex flex-col items-center">
+                <CutiPdfLivePreview
+                  masterPdfBytes={masterPdfBytes}
+                  formData={modalItemData || (hasContent(appliedDocData) ? appliedDocData : formData)}
+                  formatIndoDate={formatIndoDate}
+                  onUploadTemplate={handleUploadTemplate}
+                  onReloadTemplate={handleReloadTemplate}
+                  scale={previewZoom / 100}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center p-20 text-center text-cyan-300 font-mono text-xs gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+                <span>Memuat Dokumen PDF Master Asli...</span>
+              </div>
+            )}
           </div>
 
           {/* Modal Bottom Status Bar */}

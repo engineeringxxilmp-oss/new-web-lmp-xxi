@@ -14,6 +14,8 @@ import {
 } from 'firebase/firestore';
 import { firestore, ensureFirebaseAuth } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
+import studioProyektorService from '../services/studioProyektorService';
+import studioProyektorDb from '../services/studioProyektorDb';
 import {
   Area,
   Equipment,
@@ -80,6 +82,61 @@ class FirestoreDatabase {
   // Temporary local cache loader to avoid blank screens while network initializes
   private loadFromCache() {
     try {
+      // 1. One-time clean slate wipe of legacy/cached operational data
+      const CLEAN_SLATE_APPLIED_KEY = 'xxi_clean_slate_applied_oct_2026_v2';
+      if (!localStorage.getItem(CLEAN_SLATE_APPLIED_KEY)) {
+        const keysToRemove = [
+          'fs_cache_areas',
+          'fs_cache_equipment',
+          'fs_cache_pr_engineering',
+          'fs_cache_vendors',
+          'fs_cache_orders',
+          'fs_cache_barang_datang',
+          'fs_cache_riwayat',
+          'fs_cache_film_uploads',
+          'fs_cache_weekly_reports',
+          'fs_cache_jadwal_film',
+          'fs_cache_ip_devices',
+          'fs_cache_ip_areas',
+          'fs_cache_ip_categories',
+          'fs_cache_report_histories',
+          'fs_cache_form_cuti',
+          'fs_cache_berita_acara_draft',
+          'xxi_areas',
+          'xxi_equipment',
+          'xxi_pr_engineering',
+          'xxi_vendors',
+          'xxi_orders',
+          'xxi_barang_datang',
+          'xxi_riwayat',
+          'xxi_jadwal_film',
+          'xxi_form_cuti_history_v1',
+          'xxi_form_cuti_current_draft',
+          'xxi_ba_draft_v2',
+          'xxi_ba_batch_list',
+          'xxi_selected_laporan_films',
+          'xxi_has_imported_to_laporan',
+          'xxi_weekly_reports_v1',
+          'xxi_sp_studios_v2',
+          'xxi_sp_proyektors_v2',
+          'xxi_sp_studios_v1',
+          'xxi_sp_proyektors_v1',
+          'xxi_studio_proyektor_items_v3',
+          'xxi_studio_proyektor_deleted_v3',
+          'cinema_xxi_engineering_notes',
+          'cinema_xxi_sop_documents',
+          'xxi_ip_devices',
+          'xxi_ip_areas',
+          'xxi_ip_categories'
+        ];
+        keysToRemove.forEach((k) => {
+          try {
+            localStorage.removeItem(k);
+          } catch (_) {}
+        });
+        localStorage.setItem(CLEAN_SLATE_APPLIED_KEY, 'true');
+      }
+
       const getCached = <T>(key: string, fallback: T): T => {
         const item = localStorage.getItem(`fs_cache_${key}`);
         if (!item) return fallback;
@@ -90,49 +147,22 @@ class FirestoreDatabase {
         }
       };
 
-      this.areas = getCached('areas', INITIAL_AREAS);
-      this.equipment = getCached('equipment', INITIAL_EQUIPMENT);
-      this.prList = getCached('pr_engineering', INITIAL_PR_ENGINEERING);
-      this.vendors = getCached('vendors', INITIAL_VENDORS);
-      this.orders = getCached('orders', INITIAL_ORDERS);
-      this.barangDatang = getCached('barang_datang', INITIAL_BARANG_DATANG);
-      this.riwayat = getCached('riwayat', INITIAL_RIWAYAT);
-      this.filmUploads = getCached('film_uploads', INITIAL_FILM_UPLOAD);
-      const cachedReports = getCached<WeeklyReport[]>('weekly_reports', []);
-      this.weeklyReports = cachedReports.filter((r) => {
-        try {
-          const parsed = JSON.parse(r.report_json);
-          const films = parsed.films || [];
-          const isMockDump =
-            (films.length === 34 && films.every((f: any) => f.id?.startsWith('flm-'))) ||
-            (films.length <= 4 && films.every((f: any) => f.id?.startsWith('film-')) && !parsed.is_imported && (r.id?.startsWith('wr-mock') || r.id?.startsWith('rep-mock')));
-          return !isMockDump;
-        } catch {
-          return true;
-        }
-      });
-      let initialJadwal: JadwalFilmItem[] = [];
-      try {
-        const legacyJadwal = localStorage.getItem('xxi_jadwal_film');
-        if (legacyJadwal) {
-          const parsedLegacy = JSON.parse(legacyJadwal);
-          if (Array.isArray(parsedLegacy)) initialJadwal = parsedLegacy;
-        }
-      } catch (_) {}
-      this.jadwalFilm = getCached('jadwal_film', initialJadwal);
-      this.ipDevices = getCached('ip_devices', INITIAL_IP_DEVICES);
-      this.ipAreas = getCached('ip_areas', INITIAL_IP_AREAS);
-      this.ipCategories = getCached('ip_categories', INITIAL_IP_CATEGORIES);
-      this.reportHistories = getCached('report_histories', INITIAL_REPORT_HISTORIES);
+      // Completely clean initial states
+      this.areas = getCached('areas', []);
+      this.equipment = getCached('equipment', []);
+      this.prList = getCached('pr_engineering', []);
+      this.vendors = getCached('vendors', []);
+      this.orders = getCached('orders', []);
+      this.barangDatang = getCached('barang_datang', []);
+      this.riwayat = getCached('riwayat', []);
+      this.filmUploads = getCached('film_uploads', []);
+      this.weeklyReports = getCached<WeeklyReport[]>('weekly_reports', []);
+      this.jadwalFilm = getCached('jadwal_film', []);
+      this.ipDevices = getCached('ip_devices', []);
+      this.ipAreas = getCached('ip_areas', []);
+      this.ipCategories = getCached('ip_categories', []);
+      this.reportHistories = getCached('report_histories', []);
       this.formCutiList = getCached('form_cuti', []);
-      if (this.formCutiList.length === 0) {
-        try {
-          const legacyCuti = localStorage.getItem('xxi_form_cuti_history_v1');
-          if (legacyCuti) {
-            this.formCutiList = JSON.parse(legacyCuti);
-          }
-        } catch (_) {}
-      }
       this.branding = getCached('branding', DEFAULT_BRANDING);
       this.beritaAcaraDraft = getCached('berita_acara_draft', null);
     } catch (e) {
@@ -166,6 +196,18 @@ class FirestoreDatabase {
     this.isInitialized = true;
 
     await ensureFirebaseAuth();
+
+    // One-time automatic clean-slate wipe on first boot to guarantee database is 100% clean
+    const REMOTE_CLEAN_SLATE_FLAG = 'xxi_remote_clean_slate_executed_oct_2026_v2';
+    if (!localStorage.getItem(REMOTE_CLEAN_SLATE_FLAG)) {
+      try {
+        await this.resetAllOperationalData();
+        localStorage.setItem(REMOTE_CLEAN_SLATE_FLAG, 'true');
+      } catch (err) {
+        console.warn('Initial remote clean slate execution note:', err);
+      }
+    }
+
     this.attachRealtimeListeners();
 
     // Run seed asynchronously in background so listeners and cache are available immediately
@@ -174,153 +216,10 @@ class FirestoreDatabase {
     });
   }
 
-  // Migrate existing data or seed initial cinema data if Firestore is empty
+  // Migrate existing data or seed master cinema areas if Firestore is empty
   private async seedInitialDataIfNeeded() {
-    try {
-      const eqSnap = await getDocs(collection(firestore, 'equipment'));
-      if (eqSnap.empty) {
-        console.log('Firestore equipment is empty. Seeding initial equipment to Firestore...');
-
-        // Check if user had created data in previous localStorage 'xxi_equipment'
-        let initialEq = INITIAL_EQUIPMENT;
-        try {
-          const legacy = localStorage.getItem('xxi_equipment');
-          if (legacy) {
-            const parsed = JSON.parse(legacy);
-            if (Array.isArray(parsed) && parsed.length > 0) initialEq = parsed;
-          }
-        } catch {
-          // ignore
-        }
-
-        const batch = writeBatch(firestore);
-        initialEq.forEach((eq) => {
-          const docRef = doc(firestore, 'equipment', eq.id);
-          batch.set(docRef, { ...eq, updated_at: new Date().toISOString() });
-        });
-        await batch.commit();
-      }
-
-      // Check and seed areas if empty
-      const areasSnap = await getDocs(collection(firestore, 'areas'));
-      if (areasSnap.empty) {
-        let initialAreas = INITIAL_AREAS;
-        try {
-          const legacy = localStorage.getItem('xxi_areas');
-          if (legacy) {
-            const parsed = JSON.parse(legacy);
-            if (Array.isArray(parsed) && parsed.length > 0) initialAreas = parsed;
-          }
-        } catch {}
-        const batch = writeBatch(firestore);
-        initialAreas.forEach((a) => {
-          batch.set(doc(firestore, 'areas', a.id), a);
-        });
-        await batch.commit();
-      }
-
-      // Check and seed PR engineering if empty
-      const prSnap = await getDocs(collection(firestore, 'pr_engineering'));
-      if (prSnap.empty) {
-        let initialPr = INITIAL_PR_ENGINEERING;
-        try {
-          const legacy = localStorage.getItem('xxi_pr_engineering');
-          if (legacy) {
-            const parsed = JSON.parse(legacy);
-            if (Array.isArray(parsed) && parsed.length > 0) initialPr = parsed;
-          }
-        } catch {}
-        const batch = writeBatch(firestore);
-        initialPr.forEach((pr) => {
-          batch.set(doc(firestore, 'pr_engineering', pr.id), pr);
-        });
-        await batch.commit();
-      }
-
-      // Check and seed vendors if empty
-      const vendorSnap = await getDocs(collection(firestore, 'vendors'));
-      if (vendorSnap.empty) {
-        let initialVendors = INITIAL_VENDORS;
-        try {
-          const legacy = localStorage.getItem('xxi_vendors');
-          if (legacy) {
-            const parsed = JSON.parse(legacy);
-            if (Array.isArray(parsed) && parsed.length > 0) initialVendors = parsed;
-          }
-        } catch {}
-        const batch = writeBatch(firestore);
-        initialVendors.forEach((v) => {
-          batch.set(doc(firestore, 'vendors', v.id), v);
-        });
-        await batch.commit();
-      }
-
-      // Check and seed orders if empty
-      const orderSnap = await getDocs(collection(firestore, 'orders'));
-      if (orderSnap.empty) {
-        let initialOrders = INITIAL_ORDERS;
-        try {
-          const legacy = localStorage.getItem('xxi_orders');
-          if (legacy) {
-            const parsed = JSON.parse(legacy);
-            if (Array.isArray(parsed) && parsed.length > 0) initialOrders = parsed;
-          }
-        } catch {}
-        const batch = writeBatch(firestore);
-        initialOrders.forEach((o) => {
-          batch.set(doc(firestore, 'orders', o.id), o);
-        });
-        await batch.commit();
-      }
-
-      // Check and seed barang datang if empty
-      const bdSnap = await getDocs(collection(firestore, 'barang_datang'));
-      if (bdSnap.empty) {
-        let initialBd = INITIAL_BARANG_DATANG;
-        try {
-          const legacy = localStorage.getItem('xxi_barang_datang');
-          if (legacy) {
-            const parsed = JSON.parse(legacy);
-            if (Array.isArray(parsed) && parsed.length > 0) initialBd = parsed;
-          }
-        } catch {}
-        const batch = writeBatch(firestore);
-        initialBd.forEach((b) => {
-          batch.set(doc(firestore, 'barang_datang', b.id), b);
-        });
-        await batch.commit();
-      }
-
-      // Check and seed riwayat if empty
-      const riwayatSnap = await getDocs(collection(firestore, 'riwayat_equipment'));
-      if (riwayatSnap.empty) {
-        let initialRiwayat = INITIAL_RIWAYAT;
-        try {
-          const legacy = localStorage.getItem('xxi_riwayat');
-          if (legacy) {
-            const parsed = JSON.parse(legacy);
-            if (Array.isArray(parsed) && parsed.length > 0) initialRiwayat = parsed;
-          }
-        } catch {}
-        const batch = writeBatch(firestore);
-        initialRiwayat.forEach((r) => {
-          batch.set(doc(firestore, 'riwayat_equipment', r.id), r);
-        });
-        await batch.commit();
-      }
-
-      // Check and seed IP devices if empty
-      const ipSnap = await getDocs(collection(firestore, 'ip_devices'));
-      if (ipSnap.empty) {
-        const batch = writeBatch(firestore);
-        INITIAL_IP_DEVICES.forEach((d) => {
-          batch.set(doc(firestore, 'ip_devices', d.id), d);
-        });
-        await batch.commit();
-      }
-    } catch (e) {
-      console.warn('Seed initial data to Firestore encountered warning:', e);
-    }
+    // Clean-slate state: do not automatically seed areas when empty.
+    // User can add custom areas manually via Master Area view.
   }
 
   // Realtime Firestore listeners
@@ -1257,9 +1156,158 @@ class FirestoreDatabase {
       filmUploads: this.getFilmUploads(),
       weeklyReports: this.getWeeklyReports(),
       jadwalFilm: this.getJadwalFilm(),
+      ipDevices: this.getIpDevices(),
+      reportHistories: this.getReportHistories(),
+      formCutiList: this.getFormCutiList(),
       branding: this.getBranding()
     };
     return JSON.stringify(payload, null, 2);
+  }
+
+  // --- RESET ALL OPERATIONAL DATA (SAFE CLEAN SLATE) ---
+  async resetAllOperationalData(): Promise<void> {
+    try {
+      // 1. Reset in-memory state FIRST so all UI views immediately display clean empty state
+      this.areas = [];
+      this.equipment = [];
+      this.prList = [];
+      this.vendors = [];
+      this.orders = [];
+      this.barangDatang = [];
+      this.riwayat = [];
+      this.filmUploads = [];
+      this.weeklyReports = [];
+      this.jadwalFilm = [];
+      this.ipDevices = [];
+      this.ipAreas = [];
+      this.ipCategories = [];
+      this.reportHistories = [];
+      this.formCutiList = [];
+      this.beritaAcaraDraft = null;
+
+      // 2. Clear operational local storage caches immediately (preserving configurations & auth)
+      const operationalCacheKeys = [
+        'fs_cache_areas',
+        'fs_cache_equipment',
+        'fs_cache_pr_engineering',
+        'fs_cache_vendors',
+        'fs_cache_orders',
+        'fs_cache_barang_datang',
+        'fs_cache_riwayat',
+        'fs_cache_film_uploads',
+        'fs_cache_weekly_reports',
+        'fs_cache_jadwal_film',
+        'fs_cache_ip_devices',
+        'fs_cache_ip_areas',
+        'fs_cache_ip_categories',
+        'fs_cache_report_histories',
+        'fs_cache_form_cuti',
+        'fs_cache_berita_acara_draft',
+        'xxi_areas',
+        'xxi_equipment',
+        'xxi_pr_engineering',
+        'xxi_vendors',
+        'xxi_orders',
+        'xxi_barang_datang',
+        'xxi_riwayat',
+        'xxi_jadwal_film',
+        'xxi_form_cuti_history_v1',
+        'xxi_form_cuti_current_draft',
+        'xxi_ba_draft_v2',
+        'xxi_ba_batch_list',
+        'xxi_selected_laporan_films',
+        'xxi_has_imported_to_laporan',
+        'xxi_weekly_reports_v1',
+        'xxi_sp_studios_v2',
+        'xxi_sp_proyektors_v2',
+        'xxi_sp_studios_v1',
+        'xxi_sp_proyektors_v1',
+        'xxi_studio_proyektor_items_v3',
+        'xxi_studio_proyektor_deleted_v3',
+        'cinema_xxi_engineering_notes',
+        'cinema_xxi_sop_documents',
+        'xxi_ip_devices',
+        'xxi_ip_areas',
+        'xxi_ip_categories'
+      ];
+
+      operationalCacheKeys.forEach((k) => {
+        try {
+          localStorage.removeItem(k);
+        } catch (_) {}
+      });
+
+      // 3. Notify all active listeners across all views immediately
+      this.notify();
+
+      // 4. Reset Studio & Proyektor services immediately
+      try {
+        await Promise.allSettled([
+          studioProyektorService.resetOperationalData(),
+          studioProyektorDb.resetAllData()
+        ]);
+      } catch (spErr) {
+        console.warn('[Reset] Warn clearing studio proyektor operational data:', spErr);
+      }
+
+      // 5. Delete all operational docs in Firestore in parallel with timeout protection
+      const operationalCollections = [
+        'areas',
+        'equipment',
+        'pr_engineering',
+        'vendors',
+        'orders',
+        'barang_datang',
+        'riwayat_equipment',
+        'film_uploads',
+        'weekly_reports',
+        'jadwal_film',
+        'ip_devices',
+        'report_histories',
+        'report_history',
+        'form_cuti',
+        'sp_studios',
+        'sp_proyektors',
+        'studio_proyektor_v3'
+      ];
+
+      const deletePromises = operationalCollections.map(async (colName) => {
+        try {
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('timeout')), 2500)
+          );
+          const snap = (await Promise.race([
+            getDocs(collection(firestore, colName)),
+            timeoutPromise
+          ])) as any;
+
+          if (snap && !snap.empty) {
+            const batch = writeBatch(firestore);
+            snap.docs.forEach((d: any) => {
+              batch.delete(doc(firestore, colName, d.id));
+            });
+            await batch.commit();
+          }
+        } catch (colErr) {
+          console.warn(`[Reset] Non-blocking warn clearing collection ${colName}:`, colErr);
+        }
+      });
+
+      const clearDraftPromise = deleteDoc(doc(firestore, 'system_settings', 'berita_acara_draft')).catch(() => {});
+
+      // Race with max 2.5 seconds timeout so the UI never hangs
+      await Promise.race([
+        Promise.allSettled([...deletePromises, clearDraftPromise]),
+        new Promise((resolve) => setTimeout(resolve, 2500))
+      ]);
+
+      // 6. Final notify to make sure everything stays empty
+      this.notify();
+    } catch (err) {
+      console.error('[Reset] Failed to reset operational data:', err);
+      this.notify();
+      throw err;
+    }
   }
 
   async importRestoreData(jsonString: string): Promise<boolean> {

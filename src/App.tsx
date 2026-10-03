@@ -46,6 +46,7 @@ import RapotFilm from './views/RapotFilm';
 import Laporan from './views/Laporan';
 import Pengaturan from './views/Pengaturan';
 import IpCredentialManager from './views/IpCredentialManager';
+import StudioProyektorDashboardView from './views/StudioProyektorDashboardView';
 
 export interface Toast {
   id: string;
@@ -618,6 +619,18 @@ export default function App() {
               syncWithDatabase();
               triggerToast('Database berhasil di-restore! Semua data telah sinkron.', 'success');
             }}
+            onNavigateToDashboard={() => {
+              syncWithDatabase();
+              setActiveTab('dashboard');
+              triggerToast('Reset Berhasil 100%! Semua data operasional telah dikosongkan.', 'success');
+            }}
+          />
+        );
+      case 'studio-proyektor':
+      case 'area-studio-proyektor':
+        return (
+          <StudioProyektorDashboardView
+            onShowToast={triggerToast}
           />
         );
       default:
@@ -634,6 +647,8 @@ export default function App() {
       case 'dashboard': return 'Dashboard';
       case 'form-cuti': return 'Form Cuti';
       case 'master-area': return 'Master Area';
+      case 'studio-proyektor':
+      case 'area-studio-proyektor': return 'Studio & Proyektor';
       case 'ip-credential-manager': return 'IP & Login';
       case 'equipment': return 'List Peralatan';
       case 'pr-engineering': return 'PR Teknik';

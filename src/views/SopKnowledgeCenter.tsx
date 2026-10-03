@@ -576,6 +576,9 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
   // Note Modal & Filter States
   const [isNoteModalOpen, setIsNoteModalOpen] = useState<boolean>(false);
   const [editingNote, setEditingNote] = useState<EngineeringNote | null>(null);
+  const [deletingNote, setDeletingNote] = useState<EngineeringNote | null>(null);
+  const [isClearAllNotesModalOpen, setIsClearAllNotesModalOpen] = useState<boolean>(false);
+  const [isClearPortalModalOpen, setIsClearPortalModalOpen] = useState<boolean>(false);
   const [noteCategoryFilter, setNoteCategoryFilter] = useState<string>('All');
   const [notePriorityFilter, setNotePriorityFilter] = useState<string>('All');
   const [noteSearchQuery, setNoteSearchQuery] = useState<string>('');
@@ -673,12 +676,38 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
     setIsNoteModalOpen(false);
   };
 
-  const handleDeleteNote = (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    if (window.confirm('Hapus catatan informasi ini?')) {
-      setEngineeringNotes((prev) => prev.filter((n) => n.id !== id));
+  const handleDeleteNote = (noteOrId: EngineeringNote | string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    const note =
+      typeof noteOrId === 'string'
+        ? engineeringNotes.find((n) => n.id === noteOrId) || null
+        : noteOrId;
+    if (note) {
+      setDeletingNote(note);
+    } else if (typeof noteOrId === 'string') {
+      setEngineeringNotes((prev) => {
+        const next = prev.filter((n) => n.id !== noteOrId);
+        localStorage.setItem('cinema_xxi_engineering_notes', JSON.stringify(next));
+        return next;
+      });
       toast('Catatan berhasil dihapus.', 'info');
     }
+  };
+
+  const confirmDeleteNote = () => {
+    if (!deletingNote) return;
+    const targetId = deletingNote.id;
+    const targetTitle = deletingNote.judul;
+    setEngineeringNotes((prev) => {
+      const next = prev.filter((n) => n.id !== targetId);
+      localStorage.setItem('cinema_xxi_engineering_notes', JSON.stringify(next));
+      return next;
+    });
+    toast(`Catatan "${targetTitle}" berhasil dihapus.`, 'info');
+    setDeletingNote(null);
   };
 
   const handleTogglePinNote = (id: string, e?: React.MouseEvent) => {
@@ -1767,27 +1796,9 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
             </button>
 
             <button
-              onClick={() => {
-                if (window.confirm('Kosongkan semua daftar dokumen di Web Portal? (Dokumen yang dihapus tidak akan diimpor ulang otomatis saat auto-sync).')) {
-                  const deletedKeysToAdd: string[] = [];
-                  documents.forEach((doc) => {
-                    const targetId = extractDriveFileId(doc.googleDriveLink || doc.googleDriveFileId || '');
-                    const cleanName = doc.namaDokumen.toLowerCase().trim();
-                    deletedKeysToAdd.push(doc.id, doc.googleDriveFileId || '', targetId || '', cleanName, `${cleanName}.pdf`);
-                  });
-
-                  setDeletedDriveKeys((prev) => {
-                    const updated = Array.from(new Set([...prev, ...deletedKeysToAdd.filter(Boolean)]));
-                    localStorage.setItem('cinema_xxi_sop_deleted_keys', JSON.stringify(updated));
-                    return updated;
-                  });
-
-                  setDocuments([]);
-                  localStorage.setItem('cinema_xxi_sop_documents', JSON.stringify([]));
-                  toast('Daftar dokumen telah dikosongkan.', 'info');
-                }
-              }}
-              className="p-2 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center hover:scale-[1.02] active:scale-95 shadow-sm"
+              type="button"
+              onClick={() => setIsClearPortalModalOpen(true)}
+              className="p-2 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-500/40 hover:border-red-400 text-xs font-mono font-bold transition-all cursor-pointer flex items-center justify-center hover:scale-[1.02] active:scale-95 shadow-sm"
               id="btn-clear-all-docs"
               title="Kosongkan tampilan daftar dokumen di Web Portal"
             >
@@ -2177,15 +2188,11 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
             <div className="flex items-center gap-2.5 shrink-0">
               {engineeringNotes.length > 0 && (
                 <button
-                  onClick={() => {
-                    if (window.confirm('Apakah Anda yakin ingin menghapus SELURUH catatan engineering?')) {
-                      setEngineeringNotes([]);
-                      localStorage.removeItem('cinema_xxi_engineering_notes');
-                      toast('Seluruh catatan telah dihapus dan menu dikosongkan.', 'info');
-                    }
-                  }}
-                  className="px-4 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 font-mono font-bold text-xs sm:text-sm border border-rose-500/40 transition-all cursor-pointer flex items-center gap-1.5"
+                  type="button"
+                  onClick={() => setIsClearAllNotesModalOpen(true)}
+                  className="px-4 py-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 font-mono font-bold text-xs sm:text-sm border border-rose-500/40 hover:border-rose-400 transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm"
                   title="Hapus semua catatan"
+                  id="btn-clear-all-notes"
                 >
                   <Trash2 className="h-4 w-4" /> Hapus Semua
                 </button>
@@ -2326,9 +2333,12 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                         </button>
 
                         <button
-                          onClick={(e) => handleDeleteNote(note.id, e)}
-                          className="p-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-400 border border-rose-500/40 transition-all cursor-pointer"
+                          type="button"
+                          onClick={(e) => handleDeleteNote(note, e)}
+                          className="p-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-400 border border-rose-500/40 hover:border-rose-400 hover:text-rose-300 transition-all cursor-pointer hover:scale-105 active:scale-95 shadow-sm"
                           title="Hapus Catatan"
+                          id={`btn-delete-note-${note.id}`}
+                          aria-label={`Hapus Catatan ${note.judul}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -3713,6 +3723,139 @@ export default function SopKnowledgeCenter({ onShowToast }: SopKnowledgeCenterPr
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* DELETE NOTE CONFIRMATION DIALOG */}
+      {deletingNote && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-[#0a1120] border-2 border-rose-500/50 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-[0_0_50px_rgba(244,63,94,0.35)] animate-scale-up">
+            <div className="h-14 w-14 rounded-full bg-rose-950/80 border border-rose-500/50 flex items-center justify-center text-rose-400 mx-auto shadow-inner">
+              <Trash2 className="h-7 w-7" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-white">Konfirmasi Hapus Catatan</h3>
+              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 text-left space-y-1">
+                <p className="text-sm font-black text-rose-300 line-clamp-1">{deletingNote.judul}</p>
+                <p className="text-xs text-slate-400 font-mono">
+                  📂 {deletingNote.kategori} • 👤 {deletingNote.penulis}
+                </p>
+              </div>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Apakah Anda yakin ingin menghapus catatan informasi ini? Tindakan ini akan menghapus catatan secara permanen dari daftar.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingNote(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white font-bold text-xs font-mono cursor-pointer transition-all active:scale-95"
+              >
+                BATAL
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteNote}
+                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs font-mono shadow-[0_0_20px_rgba(244,63,94,0.5)] cursor-pointer transition-all active:scale-95 flex items-center gap-2"
+                id="btn-confirm-delete-note"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>YA, HAPUS CATATAN</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLEAR ALL NOTES CONFIRMATION MODAL */}
+      {isClearAllNotesModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-[#0a1120] border-2 border-rose-500/50 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-[0_0_50px_rgba(244,63,94,0.35)] animate-scale-up">
+            <div className="h-14 w-14 rounded-full bg-rose-950/80 border border-rose-500/50 flex items-center justify-center text-rose-400 mx-auto shadow-inner">
+              <Trash2 className="h-7 w-7" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-white">Konfirmasi Hapus Seluruh Catatan</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Apakah Anda yakin ingin menghapus <strong className="text-rose-400 font-bold">SELURUH ({engineeringNotes.length})</strong> catatan engineering? Semua catatan akan dikosongkan dan menu kembali bersih.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearAllNotesModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white font-bold text-xs font-mono cursor-pointer transition-all active:scale-95"
+              >
+                BATAL
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEngineeringNotes([]);
+                  localStorage.removeItem('cinema_xxi_engineering_notes');
+                  toast('Seluruh catatan telah dihapus dan menu dikosongkan.', 'info');
+                  setIsClearAllNotesModalOpen(false);
+                }}
+                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs font-mono shadow-[0_0_20px_rgba(244,63,94,0.5)] cursor-pointer transition-all active:scale-95 flex items-center gap-2"
+                id="btn-confirm-clear-all-notes"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>YA, KOSONGKAN SEMUA</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLEAR PORTAL DOCS CONFIRMATION MODAL */}
+      {isClearPortalModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-[#0a1120] border-2 border-rose-500/50 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-[0_0_50px_rgba(244,63,94,0.35)] animate-scale-up">
+            <div className="h-14 w-14 rounded-full bg-rose-950/80 border border-rose-500/50 flex items-center justify-center text-rose-400 mx-auto shadow-inner">
+              <Trash2 className="h-7 w-7" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-black text-white">Kosongkan Dokumen Web Portal</h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Apakah Anda yakin ingin mengosongkan semua daftar dokumen di Web Portal? Dokumen yang dihapus tidak akan diimpor ulang otomatis saat auto-sync.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsClearPortalModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white font-bold text-xs font-mono cursor-pointer transition-all active:scale-95"
+              >
+                BATAL
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const deletedKeysToAdd: string[] = [];
+                  documents.forEach((doc) => {
+                    const targetId = extractDriveFileId(doc.googleDriveLink || doc.googleDriveFileId || '');
+                    const cleanName = doc.namaDokumen.toLowerCase().trim();
+                    deletedKeysToAdd.push(doc.id, doc.googleDriveFileId || '', targetId || '', cleanName, `${cleanName}.pdf`);
+                  });
+
+                  setDeletedDriveKeys((prev) => {
+                    const updated = Array.from(new Set([...prev, ...deletedKeysToAdd.filter(Boolean)]));
+                    localStorage.setItem('cinema_xxi_sop_deleted_keys', JSON.stringify(updated));
+                    return updated;
+                  });
+
+                  setDocuments([]);
+                  localStorage.setItem('cinema_xxi_sop_documents', JSON.stringify([]));
+                  toast('Daftar dokumen telah dikosongkan.', 'info');
+                  setIsClearPortalModalOpen(false);
+                }}
+                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs font-mono shadow-[0_0_20px_rgba(244,63,94,0.5)] cursor-pointer transition-all active:scale-95 flex items-center gap-2"
+                id="btn-confirm-clear-portal-docs"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>YA, KOSONGKAN DOKUMEN</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -26,7 +26,8 @@ import {
   Shield,
   LogOut,
   UserCheck,
-  Eye
+  Eye,
+  Projector
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { UserSession } from '../views/Login';
@@ -35,6 +36,8 @@ export type TabId =
   | 'dashboard'
   | 'form-cuti'
   | 'master-area'
+  | 'studio-proyektor'
+  | 'area-studio-proyektor'
   | 'ip-credential-manager'
   | 'equipment'
   | 'pr-engineering'
@@ -102,6 +105,7 @@ export default function Sidebar({ activeTab, onChangeTab, isOpen: controlledIsOp
     { id: 'dashboard', label: 'MENU', icon: LayoutDashboard, color: 'text-cyan-400' },
     { id: 'form-cuti', label: 'FORM CUTI', icon: Calendar, color: 'text-emerald-400' },
     { id: 'master-area', label: 'MASTER AREA LMP XXI', icon: Map, color: 'text-amber-400' },
+    { id: 'studio-proyektor', label: 'STUDIO & PROYEKTOR', icon: Projector, color: 'text-cyan-400' },
     { id: 'ip-credential-manager', label: 'IP & LOGIN', icon: Shield, color: 'text-cyan-300' },
     { id: 'equipment', label: 'LIST PERALATAN', icon: Wrench, color: 'text-emerald-400' },
     { id: 'pr-engineering', label: 'PR ENGINEERING', icon: ClipboardList, color: 'text-rose-400' },

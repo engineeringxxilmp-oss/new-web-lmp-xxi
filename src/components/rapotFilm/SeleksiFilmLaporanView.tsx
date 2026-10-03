@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { FilmUpload } from '../../types';
 import {
   runOcrSpaceScreenshotScanner,
@@ -36,7 +36,11 @@ import {
   ArrowRight,
   ZoomIn,
   ZoomOut,
-  Maximize2
+  Maximize2,
+  Move,
+  ChevronLeft,
+  ChevronRight,
+  RotateCw
 } from 'lucide-react';
 
 interface UploadedScreenshotItem {
@@ -61,11 +65,13 @@ export interface ImportToLaporanResult {
 interface SeleksiFilmLaporanViewProps {
   masterFilms: FilmUpload[];
   onImportToLaporan: (selectedFilms: FilmUpload[]) => void | Promise<ImportToLaporanResult | boolean | void>;
+  onFullscreenPreviewChange?: (isActive: boolean) => void;
 }
 
 export default function SeleksiFilmLaporanView({
   masterFilms,
-  onImportToLaporan
+  onImportToLaporan,
+  onFullscreenPreviewChange
 }: SeleksiFilmLaporanViewProps) {
   // Primary Tabs: 'scanner' (SCAN SCREENSHOT AAM / SERVER) | 'manual' (PILIH MANUAL)
   const [activeMethod, setActiveMethod] = useState<'scanner' | 'manual'>('scanner');
@@ -87,6 +93,133 @@ export default function SeleksiFilmLaporanView({
   const [debugFilter, setDebugFilter] = useState<'ALL' | 'LOCKED' | 'REVIEW' | 'NO_LOCK' | 'MATCHED' | 'NEEDS_MATCH'>('ALL');
   const [previewImage, setPreviewImage] = useState<UploadedScreenshotItem | null>(null);
   const [previewZoom, setPreviewZoom] = useState(1);
+  const [panPosition, setPanPosition] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  const panStartRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+
+  // Index of current preview image in uploadedScreenshots
+  const currentScreenshotIndex = useMemo(() => {
+    if (!previewImage) return -1;
+    return uploadedScreenshots.findIndex((s) => s.id === previewImage.id);
+  }, [previewImage, uploadedScreenshots]);
+
+  const handlePrevImage = () => {
+    if (currentScreenshotIndex <= 0) return;
+    const prev = uploadedScreenshots[currentScreenshotIndex - 1];
+    setPreviewImage(prev);
+    setPreviewZoom(1);
+    setPanPosition({ x: 0, y: 0 });
+    setRotation(0);
+  };
+
+  const handleNextImage = () => {
+    if (currentScreenshotIndex < 0 || currentScreenshotIndex >= uploadedScreenshots.length - 1) return;
+    const next = uploadedScreenshots[currentScreenshotIndex + 1];
+    setPreviewImage(next);
+    setPreviewZoom(1);
+    setPanPosition({ x: 0, y: 0 });
+    setRotation(0);
+  };
+
+  const handleWheelZoom = (e: React.WheelEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const zoomDelta = e.deltaY < 0 ? 0.2 : -0.2;
+    setPreviewZoom((z) => {
+      const nextZoom = Math.max(0.4, Math.min(4.5, Number((z + zoomDelta).toFixed(2))));
+      if (nextZoom <= 1.0) {
+        setPanPosition({ x: 0, y: 0 });
+      }
+      return nextZoom;
+    });
+  };
+
+  const handleMouseDownPan = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    setIsPanning(true);
+    panStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: panPosition.x,
+      initialY: panPosition.y
+    };
+  };
+
+  const handleMouseMovePan = (e: React.MouseEvent) => {
+    if (!isPanning) return;
+    const dx = e.clientX - panStartRef.current.startX;
+    const dy = e.clientY - panStartRef.current.startY;
+    setPanPosition({
+      x: panStartRef.current.initialX + dx,
+      y: panStartRef.current.initialY + dy
+    });
+  };
+
+  const handleMouseUpPan = () => {
+    setIsPanning(false);
+  };
+
+  const handleDoubleClickZoom = () => {
+    if (previewZoom > 1.2) {
+      setPreviewZoom(1);
+      setPanPosition({ x: 0, y: 0 });
+    } else {
+      setPreviewZoom(2.0);
+    }
+  };
+
+  // Notify parent of fullscreen preview state
+  useEffect(() => {
+    onFullscreenPreviewChange?.(Boolean(previewImage));
+  }, [previewImage, onFullscreenPreviewChange]);
+
+  // Lock body scroll & app workspace scroll when fullscreen preview is active
+  useEffect(() => {
+    const scrollContainer = document.getElementById('app-workspace-scroll');
+    if (previewImage) {
+      document.body.style.overflow = 'hidden';
+      scrollContainer?.classList.add('overflow-hidden');
+    } else {
+      document.body.style.overflow = '';
+      scrollContainer?.classList.remove('overflow-hidden');
+    }
+    return () => {
+      document.body.style.overflow = '';
+      scrollContainer?.classList.remove('overflow-hidden');
+    };
+  }, [previewImage]);
+
+  // Keyboard shortcut listener for preview modal (Esc, +, -, 0, ArrowLeft, ArrowRight)
+  useEffect(() => {
+    if (!previewImage) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewImage(null);
+        setPreviewZoom(1);
+        setPanPosition({ x: 0, y: 0 });
+        setRotation(0);
+      } else if (e.key === '+' || e.key === '=') {
+        setPreviewZoom((z) => Math.min(4.5, Number((z + 0.25).toFixed(2))));
+      } else if (e.key === '-' || e.key === '_') {
+        setPreviewZoom((z) => {
+          const next = Math.max(0.4, Number((z - 0.25).toFixed(2)));
+          if (next <= 1) setPanPosition({ x: 0, y: 0 });
+          return next;
+        });
+      } else if (e.key === '0') {
+        setPreviewZoom(1);
+        setPanPosition({ x: 0, y: 0 });
+        setRotation(0);
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevImage();
+      } else if (e.key === 'ArrowRight') {
+        handleNextImage();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewImage, currentScreenshotIndex, uploadedScreenshots]);
   const [showLocksOverlay, setShowLocksOverlay] = useState(true);
   const [detectedLocksMap, setDetectedLocksMap] = useState<Record<number, VisualLock[]>>({});
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
@@ -573,8 +706,13 @@ export default function SeleksiFilmLaporanView({
   const needReviewScannedCount = scannedResults.length - matchedScannedCount;
 
   return (
-    <div className="space-y-6 animate-slide-in" id="seleksi-film-laporan-view">
-      {/* Upper Navigation & Method Switcher */}
+    <>
+      {/* Konten Utama Seleksi Film Laporan (Disembunyikan sementara saat mode Fullscreen Preview aktif) */}
+      <div
+        className={`space-y-6 animate-slide-in ${previewImage ? 'hidden' : 'block'}`}
+        id="seleksi-film-laporan-view"
+      >
+        {/* Upper Navigation & Method Switcher */}
       <div className="bg-[#0d1322]/90 backdrop-blur-md p-6 rounded-2xl border border-cyan-500/25 shadow-[0_0_20px_rgba(0,240,255,0.05)]">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
@@ -821,7 +959,7 @@ export default function SeleksiFilmLaporanView({
                     SCREENSHOT TERSIMPAN ({uploadedScreenshots.length})
                   </span>
                   <span className="text-xs text-slate-400">
-                    {uploadedScreenshots.length > 0 ? 'Klik thumbnail untuk fullscreen preview' : 'Belum ada screenshot'}
+                    {uploadedScreenshots.length > 0 ? 'Klik thumbnail untuk preview detail' : 'Belum ada screenshot'}
                   </span>
                 </div>
 
@@ -851,7 +989,7 @@ export default function SeleksiFilmLaporanView({
                         <div className="absolute inset-0 bg-cyan-950/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center backdrop-blur-[1px]">
                           <span className="px-3.5 py-1.5 rounded-lg bg-slate-900/95 text-cyan-300 font-mono text-xs font-bold border border-cyan-500/50 flex items-center gap-1.5 shadow-2xl">
                             <Eye className="w-4 h-4" />
-                            Klik untuk Fullscreen Preview
+                            Klik untuk Preview Detail
                           </span>
                         </div>
                       </div>
@@ -866,11 +1004,14 @@ export default function SeleksiFilmLaporanView({
                             onClick={() => {
                               setPreviewImage(uploadedScreenshots[0]);
                               setPreviewZoom(1);
+                              setPanPosition({ x: 0, y: 0 });
+                              setRotation(0);
                             }}
-                            className="p-1.5 rounded-lg hover:bg-cyan-950 hover:text-cyan-400 text-slate-400 transition"
-                            title="Fullscreen preview"
+                            className="px-2.5 py-1 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm hover:border-cyan-400"
+                            title="Preview Detail Screenshot"
                           >
-                            <Eye className="w-4 h-4" />
+                            <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                            <span>Preview Detail</span>
                           </button>
                           <button
                             type="button"
@@ -896,6 +1037,8 @@ export default function SeleksiFilmLaporanView({
                           onClick={() => {
                             setPreviewImage(item);
                             setPreviewZoom(1);
+                            setPanPosition({ x: 0, y: 0 });
+                            setRotation(0);
                           }}
                           className="h-36 sm:h-40 w-full overflow-hidden bg-[#070b14] cursor-pointer flex items-center justify-center relative p-2 border-b border-slate-800"
                         >
@@ -908,7 +1051,7 @@ export default function SeleksiFilmLaporanView({
                           <div className="absolute inset-0 bg-cyan-950/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center backdrop-blur-[1px]">
                             <span className="px-2.5 py-1 rounded bg-slate-900/90 text-cyan-300 font-mono text-xs font-bold border border-cyan-500/40 flex items-center gap-1 shadow-lg">
                               <Eye className="w-3.5 h-3.5" />
-                              Fullscreen
+                              Preview
                             </span>
                           </div>
                         </div>
@@ -923,11 +1066,14 @@ export default function SeleksiFilmLaporanView({
                               onClick={() => {
                                 setPreviewImage(item);
                                 setPreviewZoom(1);
+                                setPanPosition({ x: 0, y: 0 });
+                                setRotation(0);
                               }}
-                              className="p-1 rounded hover:bg-cyan-950 hover:text-cyan-400 text-slate-400 transition"
-                              title="Fullscreen preview"
+                              className="px-2 py-0.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 font-mono text-[11px] font-bold transition flex items-center gap-1 cursor-pointer hover:border-cyan-400"
+                              title="Preview Detail Screenshot"
                             >
-                              <Eye className="w-3.5 h-3.5" />
+                              <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Preview Detail</span>
                             </button>
                             <button
                               type="button"
@@ -1717,37 +1863,38 @@ export default function SeleksiFilmLaporanView({
           </div>
         </div>
       )}
+      </div>
 
       {/* ===================================================================== */}
-      {/* FULLSCREEN / LARGE SCREEN SCREENSHOT PREVIEW MODAL (Requirement 3) */}
+      {/* FULLSCREEN PREVIEW WORKSPACE (Memenuhi seluruh area kerja di kanan sidebar) */}
       {/* ===================================================================== */}
       {previewImage && (
         <div
-          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col p-2 sm:p-4 animate-fade-in select-none"
-          onClick={() => {
-            setPreviewImage(null);
-            setPreviewZoom(1);
-          }}
+          className="fixed top-0 pt-[48px] md:pt-[53px] bottom-0 left-0 md:left-80 right-0 z-20 flex flex-col bg-[#030712] overflow-hidden select-none animate-fade-in"
+          id="fullscreen-screenshot-preview-workspace"
         >
-          {/* Header Bar */}
-          <div
-            className="flex items-center justify-between bg-slate-950/90 border border-slate-800 rounded-xl px-4 py-2.5 mb-2 shrink-0 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
+          {/* Top Bar Preview */}
+          <div className="h-12 sm:h-14 px-4 sm:px-6 bg-[#080d1a]/95 backdrop-blur-md border-b border-cyan-500/30 flex items-center justify-between shrink-0 z-10 shadow-lg">
+            {/* Left: Info File Screenshot */}
             <div className="flex items-center gap-3 min-w-0">
-              <span className="p-1.5 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-400">
-                <ImageIcon className="w-5 h-5" />
-              </span>
+              <div className="p-1.5 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 shrink-0">
+                <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-sm sm:text-base text-white font-bold truncate max-w-xs sm:max-w-xl">
+                  {uploadedScreenshots.length > 1 && (
+                    <span className="px-2 py-0.5 rounded bg-cyan-900/80 text-cyan-200 font-mono text-[11px] font-bold border border-cyan-400/40 shrink-0">
+                      #{currentScreenshotIndex + 1} / {uploadedScreenshots.length}
+                    </span>
+                  )}
+                  <span className="font-mono text-xs sm:text-sm text-white font-bold truncate max-w-[160px] sm:max-w-xs md:max-w-md" title={previewImage.name}>
                     {previewImage.name}
                   </span>
-                  <span className="text-xs font-mono text-cyan-400 bg-cyan-950/90 px-2 py-0.5 rounded border border-cyan-500/40">
+                  <span className="text-[11px] font-mono text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/30 shrink-0 hidden sm:inline">
                     {previewImage.sizeFormatted}
                   </span>
                   {previewImage.width && previewImage.height && (
-                    <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded hidden sm:inline">
+                    <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700 hidden md:inline shrink-0">
                       {previewImage.width} × {previewImage.height} px
                     </span>
                   )}
@@ -1755,66 +1902,170 @@ export default function SeleksiFilmLaporanView({
               </div>
             </div>
 
-            {/* Controls & Close Button */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-700">
+            {/* Right: Controls & TOMBOL ✕ KELUAR PREVIEW */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {/* Zoom & Fit controls */}
+              <div className="hidden sm:flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
                 <button
                   type="button"
-                  onClick={() => setPreviewZoom((z) => Math.max(0.5, Number((z - 0.25).toFixed(2))))}
-                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition"
+                  onClick={() =>
+                    setPreviewZoom((z) => {
+                      const next = Math.max(0.5, Number((z - 0.25).toFixed(2)));
+                      if (next <= 1) setPanPosition({ x: 0, y: 0 });
+                      return next;
+                    })
+                  }
+                  className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
                   title="Zoom Out (-)"
                 >
-                  <ZoomOut className="w-4 h-4" />
+                  <ZoomOut className="w-3.5 h-3.5" />
                 </button>
-                <span className="text-xs font-mono text-cyan-300 font-bold px-2 min-w-[50px] text-center">
+                <span className="text-[11px] font-mono text-cyan-300 font-bold px-1.5 min-w-[45px] text-center select-none">
                   {Math.round(previewZoom * 100)}%
                 </span>
                 <button
                   type="button"
                   onClick={() => setPreviewZoom((z) => Math.min(3.5, Number((z + 0.25).toFixed(2))))}
-                  className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition"
+                  className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 hover:text-white transition cursor-pointer"
                   title="Zoom In (+)"
                 >
-                  <ZoomIn className="w-4 h-4" />
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <div className="w-[1px] h-3.5 bg-slate-700 mx-0.5" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewZoom(1);
+                    setPanPosition({ x: 0, y: 0 });
+                    setRotation(0);
+                  }}
+                  className={`px-2 py-0.5 rounded text-[11px] font-mono transition cursor-pointer ${
+                    previewZoom === 1 && rotation === 0
+                      ? 'bg-cyan-950 text-cyan-300 border border-cyan-500/40 font-bold'
+                      : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                  }`}
+                  title="Fit to Screen (100%)"
+                >
+                  Fit
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPreviewZoom(1)}
-                  className="px-2 py-1 rounded-lg hover:bg-slate-800 text-xs font-mono text-slate-300 hover:text-white transition hidden sm:inline-block"
-                  title="Reset Zoom (100%)"
+                  onClick={() => setRotation((r) => (r + 90) % 360)}
+                  className={`p-1 rounded transition cursor-pointer ${
+                    rotation !== 0
+                      ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
+                      : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                  }`}
+                  title="Putar 90°"
                 >
-                  100%
+                  <RotateCw className="w-3.5 h-3.5" />
                 </button>
               </div>
 
+              {/* Navigation arrows if multiple images */}
+              {uploadedScreenshots.length > 1 && (
+                <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-700/80">
+                  <button
+                    type="button"
+                    disabled={currentScreenshotIndex <= 0}
+                    onClick={handlePrevImage}
+                    className={`p-1 rounded transition ${
+                      currentScreenshotIndex <= 0
+                        ? 'opacity-30 cursor-not-allowed text-slate-500'
+                        : 'hover:bg-slate-800 text-slate-200 cursor-pointer'
+                    }`}
+                    title="Screenshot Sebelumnya (←)"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={currentScreenshotIndex >= uploadedScreenshots.length - 1}
+                    onClick={handleNextImage}
+                    className={`p-1 rounded transition ${
+                      currentScreenshotIndex >= uploadedScreenshots.length - 1
+                        ? 'opacity-30 cursor-not-allowed text-slate-500'
+                        : 'hover:bg-slate-800 text-slate-200 cursor-pointer'
+                    }`}
+                    title="Screenshot Selanjutnya (→)"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* TOMBOL ✕ KELUAR PREVIEW (Sesuai Permintaan Spesifik User) */}
               <button
                 type="button"
                 onClick={() => {
                   setPreviewImage(null);
                   setPreviewZoom(1);
+                  setPanPosition({ x: 0, y: 0 });
+                  setRotation(0);
                 }}
-                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-mono text-xs font-bold transition flex items-center gap-1.5 shadow-[0_0_15px_rgba(244,63,94,0.4)] cursor-pointer"
-                title="Tutup preview fullscreen"
+                className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-gradient-to-r from-rose-600 via-rose-500 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-mono text-xs sm:text-sm font-black transition-all flex items-center gap-1.5 sm:gap-2 shadow-[0_0_15px_rgba(244,63,94,0.4)] cursor-pointer hover:scale-102 active:scale-98 shrink-0"
+                id="btn-keluar-preview-fullscreen"
+                title="✕ Keluar Preview (Esc)"
               >
-                <X className="w-4 h-4" />
-                <span className="hidden sm:inline">TUTUP / CLOSE</span>
+                <X className="w-4 h-4 stroke-[3]" />
+                <span>✕ Keluar Preview</span>
               </button>
             </div>
           </div>
 
-          {/* Fullscreen Body: Maximum Viewport Screen Presence */}
+          {/* Fullscreen Canvas Viewport */}
           <div
-            className="flex-1 w-full h-full overflow-auto rounded-xl bg-[#03060c] border border-slate-800/80 flex items-center justify-center p-2 relative shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="flex-1 w-full min-h-0 relative overflow-hidden flex items-center justify-center select-none"
+            onWheel={handleWheelZoom}
+            onMouseDown={handleMouseDownPan}
+            onMouseMove={handleMouseMovePan}
+            onMouseUp={handleMouseUpPan}
+            onMouseLeave={handleMouseUpPan}
+            onDoubleClick={handleDoubleClickZoom}
+            style={{
+              backgroundImage: 'radial-gradient(rgba(56, 189, 248, 0.08) 1.2px, transparent 1.2px)',
+              backgroundSize: '24px 24px',
+              cursor: previewZoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default'
+            }}
           >
+            {/* Floating Navigation Arrows on Left and Right edges */}
+            {uploadedScreenshots.length > 1 && currentScreenshotIndex > 0 && (
+              <button
+                type="button"
+                onClick={handlePrevImage}
+                className="absolute left-4 z-20 p-3 rounded-full bg-slate-900/90 hover:bg-cyan-950 text-slate-300 hover:text-cyan-300 border border-slate-700 hover:border-cyan-500/60 shadow-2xl backdrop-blur-md transition-all scale-100 hover:scale-110 cursor-pointer"
+                title="Screenshot Sebelumnya (←)"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+            )}
+
+            {uploadedScreenshots.length > 1 && currentScreenshotIndex < uploadedScreenshots.length - 1 && (
+              <button
+                type="button"
+                onClick={handleNextImage}
+                className="absolute right-4 z-20 p-3 rounded-full bg-slate-900/90 hover:bg-cyan-950 text-slate-300 hover:text-cyan-300 border border-slate-700 hover:border-cyan-500/60 shadow-2xl backdrop-blur-md transition-all scale-100 hover:scale-110 cursor-pointer"
+                title="Screenshot Selanjutnya (→)"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* The Full Image Display - fills available workspace without scroll, object-fit contain */}
             <div
-              className="transition-transform duration-150 ease-out origin-center max-w-full max-h-full flex items-center justify-center"
-              style={{ transform: `scale(${previewZoom})` }}
+              className="w-full h-full p-2 sm:p-4 flex items-center justify-center transition-transform duration-75 ease-out select-none"
+              style={{
+                transform: previewZoom !== 1 || rotation !== 0 || panPosition.x !== 0 || panPosition.y !== 0
+                  ? `translate3d(${panPosition.x}px, ${panPosition.y}px, 0) scale(${previewZoom}) rotate(${rotation}deg)`
+                  : undefined,
+                transformOrigin: 'center center'
+              }}
             >
               <img
                 src={previewImage.objectUrl || previewImage.dataUrl}
                 alt={previewImage.name}
-                className="max-w-[95vw] max-h-[84vh] w-auto h-auto object-contain rounded shadow-2xl border border-slate-800"
+                draggable={false}
+                className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg shadow-[0_0_35px_rgba(0,0,0,0.85)] border border-slate-800/80 select-none pointer-events-none"
                 onError={(e) => {
                   if (previewImage.dataUrl && e.currentTarget.src !== previewImage.dataUrl) {
                     e.currentTarget.src = previewImage.dataUrl;
@@ -1822,9 +2073,31 @@ export default function SeleksiFilmLaporanView({
                 }}
               />
             </div>
+
+            {/* Subtle Help Overlay at bottom */}
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+              <div className="flex items-center gap-2 sm:gap-3 bg-slate-950/85 backdrop-blur-md border border-slate-800 px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-mono text-slate-300 shadow-xl">
+                <span className="flex items-center gap-1 text-cyan-400 font-semibold">
+                  <Move className="w-3 h-3" />
+                  <span>Scroll Zoom</span>
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-amber-300 font-semibold">Drag Geser</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-300">Dobel klik: 2x</span>
+                {uploadedScreenshots.length > 1 && (
+                  <>
+                    <span className="text-slate-600">•</span>
+                    <span className="text-emerald-300 font-semibold">← / → Pindah</span>
+                  </>
+                )}
+                <span className="text-slate-600">•</span>
+                <span className="text-rose-300 font-bold">Esc Tutup</span>
+              </div>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
